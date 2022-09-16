@@ -1,0 +1,270 @@
+syntax = "proto3";
+
+package proto;
+
+// protoc --proto_path=grpc/internal --go_out=grpc/internal --go_opt=paths=source_relative --go-grpc_out=grpc/internal --go-grpc_opt=paths=source_relative  provider.proto
+option go_package = "/internal";
+
+service Provider {
+
+    rpc Init (ProviderInit.Request) returns (ProviderInit.Response);
+
+    rpc GetProviderInformation (GetProviderInformation.Request) returns (GetProviderInformation.Response);
+
+    rpc GetProviderConfig (GetProviderConfig.Request) returns (GetProviderConfig.Response);
+
+    rpc SetProviderConfig (SetProviderConfig.Request) returns (SetProviderConfig.Response);
+
+    rpc PullTables (PullTables.Request) returns (stream PullTables.Response);
+
+    rpc DropTableAll(DropTableAll.Request) returns (DropTableAll.Response);
+
+    rpc CreateAllTables(CreateAllTables.Request) returns (CreateAllTables.Response);
+
+}
+
+
+// --------------------------------------------------------------------------------------------------------------------
+
+message ProviderInit {
+
+    message Request {
+
+        optional Storage storage = 1;
+        optional string workspace = 2;
+
+        optional string provider_config = 3;
+
+        optional bool is_install_init = 4;
+
+    }
+
+    message Response {
+        repeated Diagnostic diagnostics = 1;
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+message GetProviderInformation {
+
+    message Request {}
+
+    message Response {
+
+        string name = 1;
+
+        string version = 2;
+
+        map<string, Table> tables = 3;
+
+        string default_config_template = 4;
+
+        repeated Diagnostic diagnostics = 5;
+    }
+}
+
+message Table {
+    string namespace = 1;
+    string table_name = 2;
+    string description = 3;
+    repeated Column columns = 4;
+    repeated Table sub_tables = 5;
+    uint64 version = 6;
+}
+
+message Column {
+
+    string name = 1;
+
+    ColumnType type = 2;
+
+    string description = 3;
+
+}
+
+message ColumnMeta {
+    ResolverMeta resolver = 1;
+    bool ignore_exists = 2;
+}
+
+message ResolverMeta {
+    string name = 1;
+    bool builtin = 2;
+}
+
+message Constraint {
+
+    ConstraintType type = 1;
+
+    repeated string columns = 2;
+
+    string table_name = 3;
+
+}
+
+enum ColumnType {
+    INVALID = 0;
+    BOOL = 1;
+    SMALLINT = 2;
+    INT = 3;
+    BIGINT = 4;
+    FLOAT = 5;
+    UUID = 6;
+    STRING = 7;
+    BYTE_ARRAY = 8;
+    STRING_ARRAY = 9;
+    INT_ARRAY = 10;
+    TIMESTAMP = 11;
+    JSON = 12;
+    UUID_ARRAY = 13;
+    INET = 14;
+    INET_ARRAY = 15;
+    CIDR = 16;
+    CIDR_ARRAY = 17;
+    MAC_ADDR = 18;
+    MAC_ADDR_ARRAY = 19;
+}
+
+enum ConstraintType {
+
+    PRIMARY_KEY = 0;
+
+    FOREIGN_KEY = 1;
+
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+
+message GetProviderConfig {
+
+    message Request {}
+
+    message Response {
+
+        string name = 1;
+
+        string version = 2;
+
+        string config = 3;
+
+        repeated Diagnostic diagnostics = 4;
+    }
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+message CheckConfig {
+    message Request {
+        string config = 1;
+    }
+
+    message Response {
+        repeated Diagnostic diagnostics = 1;
+    }
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+
+message SetProviderConfig {
+
+    message Request {
+        optional Storage storage = 1;
+        optional string provider_config = 2;
+    }
+
+    message Response {
+        repeated Diagnostic diagnostics = 1;
+    }
+
+}
+
+message Storage {
+
+    StorageType type = 1;
+
+    string storage_options = 2;
+}
+
+enum StorageType {
+
+    POSTGRESQL = 0;
+
+    MYSQL = 1;
+
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+
+message PullTables {
+
+    message Request {
+
+        repeated string tables = 1;
+
+        uint64 max_goroutines = 2;
+
+        int64 timeout = 3;
+
+    }
+
+
+    message Response {
+
+        // map of tables that have finished fetching
+        map<string, bool> finished_tables = 1;
+
+        // Amount of tables collected so far
+        uint64 table_count = 2;
+
+        string table = 3;
+
+        repeated Diagnostic diagnostics = 4;
+
+    }
+
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+
+message DropTableAll {
+
+  message Request{}
+
+  message Response {
+
+    repeated Diagnostic diagnostics = 1;
+
+  }
+
+}
+
+message CreateAllTables {
+
+    message Request{}
+
+    message Response {
+
+        repeated Diagnostic diagnostics = 1;
+
+    }
+
+}
+
+
+message Diagnostic {
+
+    enum DiagnosticLevel {
+        DiagnosisLevelTrace = 0;
+        DiagnosisLevelDebug = 1;
+        DiagnosisLevelInfo = 2;
+        DiagnosisLevelWarn = 3;
+        DiagnosisLevelError = 4;
+        DiagnosisLevelFatal = 5;
+    }
+
+    DiagnosticLevel diagnosticLevel = 1;
+    string content = 2;
+
+}
+
+// --------------------------------------------------------------------------------------------------------------------
