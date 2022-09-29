@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"github.com/selefra/selefra-utils/pkg/reflect_util"
 	"github.com/spf13/cast"
 )
 
@@ -39,6 +40,17 @@ func (x *Row) Get(columnName string) (any, error) {
 		return nil, ErrorColumnNotExists
 	}
 	return value, nil
+}
+
+func (x *Row) GetOrDefault(columnName string, defaultValue any) any {
+	value, err := x.Get(columnName)
+	if err != nil {
+		return defaultValue
+	}
+	if reflect_util.IsNil(value) {
+		return defaultValue
+	}
+	return value
 }
 
 func (x *Row) GetString(columnName string) (string, error) {
