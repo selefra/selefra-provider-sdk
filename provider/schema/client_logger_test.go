@@ -22,7 +22,7 @@ func TestDefaultClientLogger_Rotate(t *testing.T) {
 	clientLogger, err := NewDefaultClientLogger(NewDefaultClientLoggerConfig(workspace, providerName))
 	assert.Nil(t, err)
 
-	for i := 1; i <= 10000000; i++ {
+	for i := 1; i <= 100000; i++ {
 		clientLogger.Debug(id_util.RandomId())
 		clientLogger.Info(id_util.RandomId())
 		clientLogger.Warn(id_util.RandomId())
