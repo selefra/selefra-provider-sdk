@@ -20,6 +20,9 @@ type TransformerMeta struct {
 	// If you do not configure this field, a default type converter will be initialized, default
 	// ColumnValueConvertor is column_value_convertor.DefaultColumnValueConvertor
 	ColumnValueConvertor ColumnValueConvertor
+
+	// If the Pull method of the DataSource returns Array or Slice, the DataSource is automatically expanded to multiple results
+	DataSourcePullResultAutoExpand bool
 }
 
 func (x *TransformerMeta) IsUseDefaultColumnValueConvertor() bool {

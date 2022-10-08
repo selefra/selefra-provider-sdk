@@ -10,6 +10,7 @@ import (
 	"github.com/selefra/selefra-provider-sdk/storage"
 	"github.com/selefra/selefra-provider-sdk/storage_factory"
 	"github.com/selefra/selefra-utils/pkg/string_util"
+	"reflect"
 	"sync"
 )
 
@@ -196,73 +197,7 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 			Ctx:                context.Background(),
 			Table:              table,
 			DiagnosticsChannel: diagnosticsChannel,
-			ResultHandler: func(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Rows, *schema.Diagnostics) {
-				table := task.Table
-
-				diagnostics := schema.NewDiagnostics()
-
-				// Analytical results
-				row, d := x.transformer.TransformResult(ctx, client, task, result)
-				hasError := d != nil && d.HasError()
-
-				if hasError {
-
-					// log transaction row error
-					msg := string_util.NewStringBuilder()
-					msg.WriteString(fmt.Sprintf("taskId = %s, table %s row transformer error: %s, raw result: %s", task.TaskId, table.TableName, d.ToString(), result))
-					if task.ParentRow != nil {
-						msg.WriteString(fmt.Sprintf("\n parent row = %s", task.ParentRow.String()))
-					}
-					if task.ParentRawResult != nil {
-						msg.WriteString(fmt.Sprintf("parent raw result: %s", task.ParentRawResult))
-					}
-					clientMeta.Error(msg.String())
-
-					// If an error occurs and ignore is configured, the end occurs
-					if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnTransformerRow) {
-						clientMeta.DebugF("taskId = %s, IgnoredErrorOnTransformerRow")
-						return nil, diagnostics
-					}
-
-				}
-
-				// If an error occurs and ignore is configured, the end occurs
-				if diagnostics.AddDiagnostics(d).HasError() {
-					return nil, diagnostics
-				}
-
-				// save result to storage
-				rows := row.ToRows()
-				d = x.storage.Insert(ctx, table, rows)
-				hasError = d != nil && d.HasError()
-
-				if hasError {
-
-					// log transaction row error
-					msg := string_util.NewStringBuilder()
-					msg.WriteString(fmt.Sprintf("taskId = %s, table %s rows save to storage error: %s, raw result: %s, row: %s", task.TaskId, table.TableName, d.ToString(), result, rows.String()))
-					if task.ParentRow != nil {
-						msg.WriteString(fmt.Sprintf("\n parent row = %s", task.ParentRow.String()))
-					}
-					if task.ParentRawResult != nil {
-						msg.WriteString(fmt.Sprintf("parent raw result: %s", task.ParentRawResult))
-					}
-					clientMeta.Error(msg.String())
-
-					// If an error occurs and ignore is configured, the end occurs
-					if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
-						clientMeta.DebugF("taskId = %s, IgnoredErrorOnSaveResult")
-						return nil, diagnostics
-					}
-
-				}
-
-				if diagnostics.AddDiagnostics(d).HasError() {
-					return nil, diagnostics
-				}
-
-				return rows, diagnostics
-			},
+			ResultHandler:      x.resultHandler,
 			TaskDoneCallback: func(ctx context.Context, clientMeta *schema.ClientMeta, task *schema.DataSourcePullTask) *schema.Diagnostics {
 				table := task.Table
 				finishTableLock.Lock()
@@ -279,7 +214,7 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 
 				if err != nil {
 					clientMeta.DebugF("taskId = %s, send rpc error: %s", task.TaskId, err)
-					return schema.NewDiagnostics().AddErrorMsg("table %s task done, send rpc error: ", task.Table.TableName, err.Error())
+					return schema.NewDiagnostics().AddErrorMsg("table %s task done, send rpc error: %s", task.Table.TableName, err.Error())
 				}
 
 				return nil
@@ -297,6 +232,116 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 	wg.Wait()
 
 	return nil
+}
+
+func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Rows, *schema.Diagnostics) {
+	diagnostics := schema.NewDiagnostics()
+
+	resultSlice := make([]any, 0)
+	if x.myProvider.TransformerMeta.DataSourcePullResultAutoExpand {
+		// expand if is array or slice
+		reflectValue := reflect.ValueOf(result)
+		switch reflectValue.Kind() {
+		case reflect.Array, reflect.Slice:
+			for index := 0; index < reflectValue.Len(); index++ {
+				item := reflectValue.Index(index).Interface()
+				resultSlice = append(resultSlice, item)
+			}
+		default:
+			resultSlice = append(resultSlice, result)
+		}
+	} else {
+		// no expand
+		resultSlice = append(resultSlice, result)
+	}
+
+	var rows *schema.Rows
+	for _, result := range resultSlice {
+		row, d := x.handleSingleResult(ctx, clientMeta, client, task, result)
+		if diagnostics.Add(d).HasError() {
+			return nil, diagnostics
+		}
+
+		if rows == nil {
+			rows = row.ToRows()
+		} else {
+			err := rows.AppendRow(row)
+			if err != nil {
+
+				x.myProvider.ClientMeta.ErrorF("")
+
+				return nil, diagnostics.AddErrorMsg("merge rows error: %s", err.Error())
+			}
+		}
+
+	}
+
+	// save result to storage
+	d := x.storage.Insert(ctx, task.Table, rows)
+	hasError := d != nil && d.HasError()
+
+	if hasError {
+
+		// log transaction row error
+		msg := string_util.NewStringBuilder()
+		msg.WriteString(fmt.Sprintf("taskId = %s, table %s rows save to storage error: %s, raw result: %s, row: %s", task.TaskId, task.Table.TableName, d.ToString(), result, rows.String()))
+		if task.ParentRow != nil {
+			msg.WriteString(fmt.Sprintf("\n parent row = %s", task.ParentRow.String()))
+		}
+		if task.ParentRawResult != nil {
+			msg.WriteString(fmt.Sprintf("parent raw result: %s", task.ParentRawResult))
+		}
+		clientMeta.Error(msg.String())
+
+		// If an error occurs and ignore is configured, the end occurs
+		if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
+			clientMeta.DebugF("taskId = %s, IgnoredErrorOnSaveResult")
+			return nil, diagnostics
+		}
+
+	}
+
+	if diagnostics.AddDiagnostics(d).HasError() {
+		return nil, diagnostics
+	}
+
+	return rows, diagnostics
+}
+
+func (x *ProviderRuntime) handleSingleResult(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Row, *schema.Diagnostics) {
+	diagnostics := schema.NewDiagnostics()
+
+	// Analytical results
+	row, d := x.transformer.TransformResult(ctx, client, task, result)
+	hasError := d != nil && d.HasError()
+
+	if hasError {
+
+		// log transaction row error
+		msg := string_util.NewStringBuilder()
+		msg.WriteString(fmt.Sprintf("taskId = %s, table %s row transformer error: %s, raw result: %s", task.TaskId, task.Table.TableName, d.ToString(), result))
+		if task.ParentRow != nil {
+			msg.WriteString(fmt.Sprintf("\n parent row = %s", task.ParentRow.String()))
+		}
+		if task.ParentRawResult != nil {
+			msg.WriteString(fmt.Sprintf("parent raw result: %s", task.ParentRawResult))
+		}
+		clientMeta.Error(msg.String())
+
+		// If an error occurs and ignore is configured, the end occurs
+		if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnTransformerRow) {
+			clientMeta.DebugF("taskId = %s, IgnoredErrorOnTransformerRow", task.TaskId)
+			return nil, diagnostics
+		}
+
+	}
+
+	// If an error occurs and ignore is configured, the end occurs
+	if diagnostics.AddDiagnostics(d).HasError() {
+		return nil, diagnostics
+	}
+
+	return row, diagnostics
 }
 
 func (x *ProviderRuntime) buildPullTablesResponseWithDiagnostics(diagnostics *schema.Diagnostics) *shard.PullTablesResponse {
