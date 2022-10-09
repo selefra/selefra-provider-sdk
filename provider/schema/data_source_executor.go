@@ -198,7 +198,7 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRo
 
 			// send diagnostics if not ignore error
 			if x.errorsHandlerMeta.IsIgnore(IgnoredErrorOnPullTable) {
-				return
+				continue
 			} else if d != nil {
 				task.DiagnosticsChannel <- d
 			}
