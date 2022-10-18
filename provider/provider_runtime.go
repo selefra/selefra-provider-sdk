@@ -267,13 +267,15 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 		} else {
 			err := rows.AppendRow(row)
 			if err != nil {
-
-				x.myProvider.ClientMeta.ErrorF("")
-
 				return nil, diagnostics.AddErrorMsg("merge rows error: %s", err.Error())
 			}
 		}
 
+	}
+
+	// 2022-10-18 15:33:38 may not any result, so just ignore it
+	if rows == nil || rows.IsEmpty() {
+		return rows, diagnostics
 	}
 
 	// save result to storage
