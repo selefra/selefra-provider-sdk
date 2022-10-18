@@ -11,8 +11,8 @@ import (
 	"github.com/selefra/selefra-utils/pkg/pointer"
 )
 
-// TestPullTables Design a test tool to facilitate the development of the Provider
-func TestPullTables(myProvider *provider.Provider, config, workspace string, pullTables ...string) {
+// RunProviderPullTables Design a test tool to facilitate the development of the Provider
+func RunProviderPullTables(myProvider *provider.Provider, config, workspace string, pullTables ...string) {
 
 	diagnostics := schema.NewDiagnostics()
 

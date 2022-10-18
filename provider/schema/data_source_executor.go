@@ -250,7 +250,7 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRo
 					}
 
 					// run task result handler
-					rows, d := x.execResultHandlerWithRecover(task.Ctx, x.clientMeta, localClientTaskContext.Client, localClientTaskContext.Task, result)
+					rows, resultSlice, d := x.execResultHandlerWithRecover(task.Ctx, x.clientMeta, localClientTaskContext.Client, localClientTaskContext.Task, result)
 					if d != nil && d.HasError() {
 						if !isIgnorePullTableError {
 							task.DiagnosticsChannel <- d
@@ -258,13 +258,20 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRo
 					} else {
 						task.DiagnosticsChannel <- d
 					}
-					if rows == nil {
+					if rows == nil || rows.IsEmpty() {
 						x.clientMeta.DebugF("taskId = %s, task result handler return nil rows", taskId)
 						continue
 					}
 
 					// The current table parsed to the result of matrix transformation, and divided into a number of only one row of matrices
-					for _, row := range rows.SplitRowByRow() {
+					rowSlice := rows.SplitRowByRow()
+					if len(rowSlice) != len(resultSlice) {
+						x.clientMeta.ErrorF("taskId = %s, len(rowSlice) != len(resultSlice)", taskId)
+						continue
+					}
+					for i := 0; i < len(rowSlice); i++ {
+						row := rowSlice[i]
+						result := resultSlice[i]
 						// Start a data pull task for each child table
 						for _, subTable := range task.Table.SubTables {
 							subTask := DataSourcePullTask{
@@ -299,7 +306,7 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRo
 }
 
 // Perform the task completion callback while capturing Panic
-func (x *DataSourceExecutor) execResultHandlerWithRecover(ctx context.Context, clientMeta *ClientMeta, client any, task *DataSourcePullTask, result any) (rows *Rows, diagnostics *Diagnostics) {
+func (x *DataSourceExecutor) execResultHandlerWithRecover(ctx context.Context, clientMeta *ClientMeta, client any, task *DataSourcePullTask, result any) (rows *Rows, resultSlice []any, diagnostics *Diagnostics) {
 
 	diagnostics = NewDiagnostics()
 
@@ -331,6 +338,6 @@ func (x *DataSourceExecutor) execResultHandlerWithRecover(ctx context.Context, c
 
 	}()
 
-	rows, diagnostics = task.ResultHandler(ctx, x.clientMeta, client, task, result)
+	rows, resultSlice, diagnostics = task.ResultHandler(ctx, x.clientMeta, client, task, result)
 	return
 }

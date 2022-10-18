@@ -234,7 +234,7 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 	return nil
 }
 
-func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Rows, *schema.Diagnostics) {
+func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Rows, []any, *schema.Diagnostics) {
 	diagnostics := schema.NewDiagnostics()
 
 	resultSlice := make([]any, 0)
@@ -259,7 +259,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 	for _, result := range resultSlice {
 		row, d := x.handleSingleResult(ctx, clientMeta, client, task, result)
 		if diagnostics.Add(d).HasError() {
-			return nil, diagnostics
+			return nil, nil, diagnostics
 		}
 
 		if rows == nil {
@@ -267,7 +267,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 		} else {
 			err := rows.AppendRow(row)
 			if err != nil {
-				return nil, diagnostics.AddErrorMsg("merge rows error: %s", err.Error())
+				return nil, nil, diagnostics.AddErrorMsg("merge rows error: %s", err.Error())
 			}
 		}
 
@@ -275,7 +275,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 
 	// 2022-10-18 15:33:38 may not any result, so just ignore it
 	if rows == nil || rows.IsEmpty() {
-		return rows, diagnostics
+		return nil, nil, diagnostics
 	}
 
 	// save result to storage
@@ -298,16 +298,16 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 		// If an error occurs and ignore is configured, the end occurs
 		if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
 			clientMeta.DebugF("taskId = %s, IgnoredErrorOnSaveResult")
-			return nil, diagnostics
+			return nil, nil, diagnostics
 		}
 
 	}
 
 	if diagnostics.AddDiagnostics(d).HasError() {
-		return nil, diagnostics
+		return nil, nil, diagnostics
 	}
 
-	return rows, diagnostics
+	return rows, resultSlice, diagnostics
 }
 
 func (x *ProviderRuntime) handleSingleResult(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Row, *schema.Diagnostics) {

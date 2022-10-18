@@ -24,7 +24,7 @@ type DataSourcePullTask struct {
 	Table *Table
 
 	// What happens to the pulled data
-	ResultHandler func(ctx context.Context, clientMeta *ClientMeta, client any, task *DataSourcePullTask, result any) (*Rows, *Diagnostics)
+	ResultHandler func(ctx context.Context, clientMeta *ClientMeta, client any, task *DataSourcePullTask, result any) (*Rows, []any, *Diagnostics)
 
 	// Callback method when the task is completed
 	TaskDoneCallback func(ctx context.Context, clientMeta *ClientMeta, task *DataSourcePullTask) *Diagnostics

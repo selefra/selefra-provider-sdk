@@ -84,7 +84,7 @@ func Test_resultHandler(t *testing.T) {
 		Bar1: "80",
 		Bar2: 443,
 	}
-	rows, d := provider.runtime.resultHandler(ctx, &provider.ClientMeta, nil, task, foo)
+	rows, slice, d := provider.runtime.resultHandler(ctx, &provider.ClientMeta, nil, task, foo)
 	if d != nil && d.Size() != 0 {
 		t.Logf("single result: %s", d.ToString())
 	}
@@ -93,6 +93,7 @@ func Test_resultHandler(t *testing.T) {
 	assert.Equal(t, 1, rows.RowCount())
 	assert.Equal(t, "80", rows.GetCellStringValueOrDefault(0, 0, ""))
 	assert.Equal(t, 443, rows.GetCellIntValueOrDefault(0, 1, 0))
+	assert.Equal(t, rows.RowCount(), len(slice))
 
 	// multi result
 	fooSlice := make([]*Foo, 0)
@@ -102,7 +103,7 @@ func Test_resultHandler(t *testing.T) {
 			Bar2: i,
 		})
 	}
-	rows, d = provider.runtime.resultHandler(ctx, &provider.ClientMeta, nil, task, fooSlice)
+	rows, slice, d = provider.runtime.resultHandler(ctx, &provider.ClientMeta, nil, task, fooSlice)
 	if d != nil && d.Size() != 0 {
 		t.Logf("multi result: %s", d.ToString())
 	}
@@ -111,5 +112,6 @@ func Test_resultHandler(t *testing.T) {
 	assert.Equal(t, 10, rows.RowCount())
 	assert.Equal(t, "9", rows.GetCellStringValueOrDefault(9, 0, ""))
 	assert.Equal(t, 9, rows.GetCellIntValueOrDefault(9, 1, 0))
+	assert.Equal(t, rows.RowCount(), len(slice))
 
 }
