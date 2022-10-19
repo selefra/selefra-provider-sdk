@@ -255,59 +255,67 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 		resultSlice = append(resultSlice, result)
 	}
 
-	var rows *schema.Rows
+	var saveSuccessRows *schema.Rows
+	saveSuccessResultSlice := make([]any, 0)
 	for _, result := range resultSlice {
-		row, d := x.handleSingleResult(ctx, clientMeta, client, task, result)
-		if diagnostics.Add(d).HasError() {
-			return nil, nil, diagnostics
-		}
 
-		if rows == nil {
-			rows = row.ToRows()
-		} else {
-			err := rows.AppendRow(row)
-			if err != nil {
-				return nil, nil, diagnostics.AddErrorMsg("merge rows error: %s", err.Error())
+		// step 1. parser from raw result to row
+		row, d := x.handleSingleResult(ctx, clientMeta, client, task, result)
+		diagnostics.Add(d)
+		if d != nil && d.HasError() {
+			// If an error occurs and ignore is configured, the end occurs
+			if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
+				clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult")
+				continue
+			} else {
+				return nil, nil, diagnostics
 			}
 		}
 
-	}
+		// step 2. save row to database
+		d = x.storage.Insert(ctx, task.Table, row.ToRows())
+		diagnostics.AddDiagnostics(d)
 
-	// 2022-10-18 15:33:38 may not any result, so just ignore it
-	if rows == nil || rows.IsEmpty() {
-		return nil, nil, diagnostics
-	}
+		if d != nil && d.HasError() {
 
-	// save result to storage
-	d := x.storage.Insert(ctx, task.Table, rows)
-	hasError := d != nil && d.HasError()
+			// log transaction row error
+			msg := string_util.NewStringBuilder()
+			msg.WriteString(fmt.Sprintf("taskId = %s, table %s rows save to storage error: %s, raw result: %s, row: %s", task.TaskId, task.Table.TableName, d.ToString(), result, row.String()))
+			if task.ParentRow != nil {
+				msg.WriteString(fmt.Sprintf("\n parent row = %s", task.ParentRow.String()))
+			}
+			if task.ParentRawResult != nil {
+				msg.WriteString(fmt.Sprintf("parent raw result: %s", task.ParentRawResult))
+			}
+			clientMeta.Error(msg.String())
 
-	if hasError {
-
-		// log transaction row error
-		msg := string_util.NewStringBuilder()
-		msg.WriteString(fmt.Sprintf("taskId = %s, table %s rows save to storage error: %s, raw result: %s, row: %s", task.TaskId, task.Table.TableName, d.ToString(), result, rows.String()))
-		if task.ParentRow != nil {
-			msg.WriteString(fmt.Sprintf("\n parent row = %s", task.ParentRow.String()))
+			// If an error occurs and ignore is configured, the end occurs
+			if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
+				clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult")
+				continue
+			} else {
+				return nil, nil, diagnostics
+			}
+		} else {
+			// merge rows
+			isRowsMergeSuccess := true
+			if saveSuccessRows == nil {
+				saveSuccessRows = row.ToRows()
+			} else {
+				err := saveSuccessRows.AppendRow(row)
+				if err != nil {
+					clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult")
+					isRowsMergeSuccess = false
+				}
+			}
+			// merge result slice, only rows merge success, then merge raw result
+			if isRowsMergeSuccess {
+				saveSuccessResultSlice = append(saveSuccessResultSlice, result)
+			}
 		}
-		if task.ParentRawResult != nil {
-			msg.WriteString(fmt.Sprintf("parent raw result: %s", task.ParentRawResult))
-		}
-		clientMeta.Error(msg.String())
-
-		// If an error occurs and ignore is configured, the end occurs
-		if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
-			clientMeta.DebugF("taskId = %s, IgnoredErrorOnSaveResult")
-			return nil, nil, diagnostics
-		}
-
 	}
 
-	if diagnostics.AddDiagnostics(d).HasError() {
-		return nil, nil, diagnostics
-	}
-
-	return rows, resultSlice, diagnostics
+	return saveSuccessRows, saveSuccessResultSlice, diagnostics
 }
 
 func (x *ProviderRuntime) handleSingleResult(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Row, *schema.Diagnostics) {
