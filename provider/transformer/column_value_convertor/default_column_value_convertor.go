@@ -4,17 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/selefra/selefra-provider-sdk/provider/schema"
-	"github.com/selefra/selefra-utils/pkg/pointer"
-	"github.com/selefra/selefra-utils/pkg/reflect_util"
-	"github.com/selefra/selefra-utils/pkg/runtime_util"
-	"github.com/spf13/cast"
 	"html/template"
 	"net"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/selefra/selefra-provider-sdk/provider/schema"
+	"github.com/selefra/selefra-utils/pkg/pointer"
+	"github.com/selefra/selefra-utils/pkg/reflect_util"
+	"github.com/selefra/selefra-utils/pkg/runtime_util"
+	"github.com/spf13/cast"
 )
 
 type DefaultColumnValueConvertor struct {
@@ -321,9 +322,9 @@ func convertToInt(columnValue any) (any, error) {
 	value := reflect.ValueOf(columnValue)
 	switch value.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return value.Int(), nil
+		return int(value.Int()), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return value.Uint(), nil
+		return int(value.Uint()), nil
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
 			return convertToInt(value.Elem())
