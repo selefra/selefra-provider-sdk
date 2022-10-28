@@ -53,7 +53,7 @@ func (x *DefaultColumnValueConvertor) isValidString(column *schema.Column, colum
 			return false
 		}
 	case reflect.Pointer:
-		return x.isValidString(column, value.Elem())
+		return x.isValidString(column, value.Elem().Interface())
 	}
 	return false
 }
@@ -877,7 +877,7 @@ func convertToByte(columnValue any) (any, error) {
 	switch value.Kind() {
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
-			return convertToByte(value.Elem())
+			return convertToByte(value.Elem().Interface())
 		}
 	}
 
