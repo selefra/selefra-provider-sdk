@@ -207,7 +207,7 @@ func convertToSmallInt(columnValue any) (any, error) {
 		return int16(reflectValue.Uint()), nil
 	case reflect.Pointer:
 		if reflectValue.Elem().IsValid() {
-			return convertToSmallInt(reflectValue.Elem())
+			return convertToSmallInt(reflectValue.Elem().Interface())
 		}
 	}
 
@@ -327,7 +327,7 @@ func convertToInt(columnValue any) (any, error) {
 		return int(value.Uint()), nil
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
-			return convertToInt(value.Elem())
+			return convertToInt(value.Elem().Interface())
 		}
 	}
 
@@ -365,7 +365,7 @@ func convertToIntSlice(columnValue any) (any, error) {
 		return intSlice, nil
 	case reflect.Pointer:
 		if reflectValue.Elem().IsValid() {
-			return convertToIntSlice(reflectValue.Elem())
+			return convertToIntSlice(reflectValue.Elem().Interface())
 		}
 	}
 
@@ -433,7 +433,7 @@ func convertToBigInt(columnValue any) (any, error) {
 		return value.Uint(), nil
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
-			return convertToBigInt(value.Elem())
+			return convertToBigInt(value.Elem().Interface())
 		}
 	}
 
@@ -505,7 +505,7 @@ func convertToFloat(columnValue any) (any, error) {
 		return value.Float(), nil
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
-			return convertToFloat(value.Elem())
+			return convertToFloat(value.Elem().Interface())
 		}
 	}
 
@@ -551,7 +551,7 @@ func convertToBool(columnValue any) (any, error) {
 		return value.Bool(), nil
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
-			return convertToBool(value.Elem())
+			return convertToBool(value.Elem().Interface())
 		}
 	}
 
@@ -624,7 +624,7 @@ func convertToString(columnValue any) (any, error) {
 		return reflectValue.String(), nil
 	case reflect.Pointer:
 		if reflectValue.Elem().IsValid() {
-			return convertToString(reflectValue.Elem())
+			return convertToString(reflectValue.Elem().Interface())
 		}
 	default:
 		// try to convert anything to json string, but may be panic if recursion
@@ -777,7 +777,7 @@ func convertToStringSlice(columnValue any) (any, error) {
 		return []string{reflectValue.String()}, nil
 	case reflect.Pointer:
 		if reflectValue.Elem().IsValid() {
-			return convertToStringSlice(reflectValue.Elem())
+			return convertToStringSlice(reflectValue.Elem().Interface())
 		}
 	case reflect.Slice, reflect.Array:
 		valueSlice := reflect.ValueOf(columnValue)
@@ -907,7 +907,7 @@ func convertToByteArray(columnValue any) (any, error) {
 		return bytes, nil
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
-			return convertToByteArray(value.Elem())
+			return convertToByteArray(value.Elem().Interface())
 		}
 	}
 	return nil, fmt.Errorf("unable to cast %#v of type %T to []byte", columnValue, columnValue)
@@ -1023,7 +1023,7 @@ func ConvertToTimestamp(columnValue any, formats ...TimeFormat) (*time.Time, err
 	switch value.Kind() {
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
-			return ConvertToTimestamp(value.Elem())
+			return ConvertToTimestamp(value.Elem().Interface())
 		}
 	}
 
@@ -1246,7 +1246,7 @@ func convertToJson(columnValue any) (any, error) {
 	switch value.Kind() {
 	case reflect.Pointer:
 		if value.Elem().IsValid() {
-			return convertToJson(value.Elem())
+			return convertToJson(value.Elem().Interface())
 		}
 	}
 
