@@ -103,7 +103,7 @@ func TestPostgresqlTableAdmin_buildCreateTableSqlSlice(t *testing.T) {
 }
 
 func TestPostgresqlTableAdmin_buildCreateTableConstraintSql(t *testing.T) {
-	
+
 }
 
 func TestPostgresqlTableAdmin_isConstraintExists(t *testing.T) {
@@ -136,4 +136,11 @@ func TestPostgresqlTableAdmin_buildDropTableSqlSlice(t *testing.T) {
 	assert.True(t, len(sqlSlice) == 2)
 	assert.Equal(t, sqlSlice[0], "DROP TABLE IF EXISTS t_test_user")
 	assert.Equal(t, sqlSlice[1], "DROP TABLE IF EXISTS t_test_user_visit_log")
+}
+
+func TestPostgresqlTableAdmin_isConstraintExists1(t *testing.T) {
+	diagnostics := schema.NewDiagnostics()
+	b, d := testTableAdmin.isConstraintExists(context.Background(), "pk_aws_wafv2_rule_groups_arn")
+	t.Log(diagnostics.Add(d).ToString())
+	t.Log(b)
 }

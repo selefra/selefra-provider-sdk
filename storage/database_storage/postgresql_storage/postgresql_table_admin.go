@@ -108,10 +108,14 @@ func (x *PostgresqlTableAdmin) TablesCreate(ctx context.Context, tables []*schem
 	sqlSlice := make([]string, 0)
 	sqlSlice = append(sqlSlice, createTableSqlSlice...)
 	sqlSlice = append(sqlSlice, addConstraintsSqlSlice...)
+	sqlSet := make(map[string]struct{}, 0)
 	for _, sql := range sqlSlice {
-		if diagnostics.AddDiagnostics(x.crudExecutor.Exec(ctx, sql)).HasError() {
-			return diagnostics
+		if _, exists := sqlSet[sql]; exists {
+			continue
 		}
+		sqlSet[sql] = struct{}{}
+		// just exec all sql
+		diagnostics.AddDiagnostics(x.crudExecutor.Exec(ctx, sql))
 	}
 	return diagnostics
 }
@@ -285,10 +289,14 @@ func (x *PostgresqlTableAdmin) TablesDrop(ctx context.Context, tables []*schema.
 	sqlSlice := make([]string, 0)
 	sqlSlice = append(sqlSlice, dropTableConstraintSqlSlice...)
 	sqlSlice = append(sqlSlice, dropTableSqlSlice...)
+	sqlSet := make(map[string]struct{})
 	for _, sql := range sqlSlice {
-		if diagnostics.AddDiagnostics(x.crudExecutor.Exec(ctx, sql)).HasError() {
-			return diagnostics
+		if _, exists := sqlSet[sql]; !exists {
+			continue
 		}
+		sqlSet[sql] = struct{}{}
+		// just exec all sql
+		diagnostics.AddDiagnostics(x.crudExecutor.Exec(ctx, sql))
 	}
 	return diagnostics
 }
