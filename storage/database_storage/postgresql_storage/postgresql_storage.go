@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/selefra/selefra-provider-sdk/provider/schema"
 	"github.com/selefra/selefra-provider-sdk/storage"
+	"strings"
 )
 
 type PostgresqlStorage struct {
@@ -55,10 +56,14 @@ func connectToPostgresqlServer(ctx context.Context, dsnURI string) (*pgxpool.Poo
 	poolCfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 
 		// TODO 2022-8-24 19:21:39 If there is no public, I will get an error and need to create one. Okay? Damn it...
-		// Put tables under public
-		_, err := conn.Exec(ctx, "SET search_path=public")
-		if err != nil {
-			return err
+		// Put tables under public]
+		// 2022-11-14 16:02:01 If DNS specifies search_path, the given search_path is used, otherwise public is used by default
+		// Use simple judgment here, and improve if there are unexpected circumstances
+		if !strings.Contains(strings.ToLower(dsnURI), "search_path=") {
+			_, err := conn.Exec(ctx, "SET search_path=public")
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
