@@ -4,21 +4,21 @@
 
 The Selefra Provider SDK enables building Selefra plugin,allow developer use SDK to  custom in-house solutions.
 
-## Getting Started
+## Documentation
 
-For getting started guides,installation,deployment,see our [Documentation](https://selefra.io/docs)
-
-## Contributing
-
-To contribute, visit [Contributing.md](https://github.com/selefra/selefra/blob/main/CONTRIBUTING.md) and [Selefra roadmap](https://github.com/orgs/selefra/projects/1)
+See [Docs](https://selefra.io/docs) for best practices and detailed instructions. In docs, you will find info on installation, CLI usage, project workflow and more guides on how to accomplish cloud inspection tasks.
 
 ## Community
 
-Selefra is a community driven project,we welcome you to file a bug,suggest an improvement ,or request a new feature.
+Selefra is a community-driven project, we welcome you to open a [GitHub Issue](https://github.com/selefra/selefra/issues/new/choose) to report a bug, suggest an improvement, or request new feature.
 
--  Join [Selefra Community Slack](https://selefra.slack.com) to discuss Selefra and join `Selefra Community Hour`.
--  Follow us on [Twitter](https://twitter.com/SelefraCorp) and shard Selefra messages on Twitter.
--  Have question and feature?Now on [Slack](https://selefra.slack.com) or open a [GitHub Issue](https://github.com/selefra/selefra/issues/new/choose)
+-  Join [Selefra Community](https://selefra.slack.com) on Slack. We host `Community Hour` for tutorials and Q&As on regular basis.
+-  Follow us on [Twitter](https://twitter.com/SelefraCorp) and share your thoughts！
+
+## CONTRIBUTING
+
+For developers interested in building Selefra codebase, read through [Contributing.md](https://github.com/selefra/selefra/blob/main/CONTRIBUTING.md) and [Selefra Roadmap](https://github.com/orgs/selefra/projects/1). 
+Let us know what you would like to work on!
 
 ## License
 
