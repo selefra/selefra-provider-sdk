@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Selefra Provider SDK enables building Selefra plugin,allow developer use SDK to  custom in-house solutions.
+The Selefra Provider SDK enables building Selefra plugin, allow developer use SDK to  custom in-house solutions.
 
 ## Documentation
 
