@@ -78,7 +78,9 @@ func TestPostgresqlCRUDExecutor_Insert(t *testing.T) {
 	assert.Nil(t, rows.AppendRowValues([]any{
 		id, username, age,
 	}))
-	assert.False(t, diagnostics.Add(testCrudExecutor.Insert(context.Background(), table, rows)).HasError())
+	diagnostics.Add(testCrudExecutor.Insert(context.Background(), table, rows))
+	t.Log(diagnostics.ToString())
+	assert.False(t, diagnostics.HasError())
 
 	// query data for validate
 	sql := "SELECT * FROM " + table.TableName
