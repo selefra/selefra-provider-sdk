@@ -291,7 +291,7 @@ func (x *PostgresqlTableAdmin) TablesDrop(ctx context.Context, tables []*schema.
 	sqlSlice = append(sqlSlice, dropTableSqlSlice...)
 	sqlSet := make(map[string]struct{})
 	for _, sql := range sqlSlice {
-		if _, exists := sqlSet[sql]; !exists {
+		if _, exists := sqlSet[sql]; exists {
 			continue
 		}
 		sqlSet[sql] = struct{}{}
