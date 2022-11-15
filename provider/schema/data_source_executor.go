@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 	"fmt"
+	"github.com/emirpasic/gods/lists/singlylinkedlist"
 	"github.com/selefra/selefra-utils/pkg/id_util"
 	"github.com/selefra/selefra-utils/pkg/reflect_util"
 	"github.com/selefra/selefra-utils/pkg/runtime_util"
@@ -17,7 +18,7 @@ import (
 type DataSourceExecutor struct {
 
 	// The pull data task waiting to be executed
-	taskChannel chan *DataSourcePullTask
+	taskQueue *DataSourcePullTaskQueue
 
 	clientMeta *ClientMeta
 
@@ -48,9 +49,8 @@ func NewDataSourcePullExecutor(workerNum uint64, clientMeta *ClientMeta, errorsH
 		clientMeta:        clientMeta,
 		errorsHandlerMeta: errorsHandlerMeta,
 		workerNum:         workerNum,
-		// TODO Perhaps the task queue size should be calculated dynamically?
-		taskChannel: make(chan *DataSourcePullTask, 1000),
-		wg:          &sync.WaitGroup{},
+		taskQueue:         NewDataSourcePullTaskQueue(),
+		wg:                &sync.WaitGroup{},
 	}
 
 	// The worker pool is started when created
@@ -61,20 +61,12 @@ func NewDataSourcePullExecutor(workerNum uint64, clientMeta *ClientMeta, errorsH
 
 // Submit Submit a data source pull task for execution
 func (x *DataSourceExecutor) Submit(ctx context.Context, task *DataSourcePullTask) *Diagnostics {
-	for {
-		select {
-		case x.taskChannel <- task:
-			return nil
-		case <-ctx.Done():
-			return NewDiagnostics().AddErrorMsg("table %s pull request id %s submit context timeout", task.Table.TableName, task.TaskId)
-		}
-	}
+	x.taskQueue.Add(task)
+	return nil
 }
 
 // ShutdownAndAwaitTermination Close the task queue and hold the current coroutine until the task completes or times out
 func (x *DataSourceExecutor) ShutdownAndAwaitTermination(ctx context.Context) *Diagnostics {
-
-	close(x.taskChannel)
 
 	x.wg.Wait()
 
@@ -82,24 +74,44 @@ func (x *DataSourceExecutor) ShutdownAndAwaitTermination(ctx context.Context) *D
 }
 
 func (x *DataSourceExecutor) runWorkers() {
-	for workerId := uint64(1); workerId <= x.workerNum; workerId++ {
-		x.wg.Add(1)
-		go func() {
-			defer x.wg.Done()
-			for task := range x.taskChannel {
-				x.execTask(task, nil, true)
 
-				// Callback method after task completion, if any
-				if task.TaskDoneCallback != nil {
-					task.TaskDoneCallback(task.Ctx, x.clientMeta, task)
+	semaphore := NewConsumerSemaphore()
+
+	for i := uint64(1); i <= x.workerNum; i++ {
+		x.wg.Add(1)
+
+		consumerId := i
+		semaphore.Init(consumerId)
+
+		go func() {
+
+			defer x.wg.Done()
+
+			for !semaphore.IsAllConsumerDone() {
+
+				if task := x.taskQueue.Take(); task != nil {
+
+					semaphore.Running(consumerId)
+
+					x.execTask(task)
+
+					// Callback method after task completion, if any
+					if task.TaskDoneCallback != nil {
+						task.TaskDoneCallback(task.Ctx, x.clientMeta, task)
+					}
+
+				} else {
+					semaphore.Idle(consumerId)
+					time.Sleep(time.Second * 1)
 				}
 			}
+
 		}()
 	}
 }
 
 // Tasks may generate new tasks, which are executed recursively
-func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRootTask bool) {
+func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 
 	taskId := task.TaskId
 	table := task.Table
@@ -110,48 +122,13 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRo
 
 	wg := sync.WaitGroup{}
 
-	// compute client for execution task
-	clientSlice := make([]any, 0)
-	if isRootTask {
-		if len(x.clientMeta.GetClientSlice()) != 0 {
-			// just root task use all client
-			clientSlice = append(clientSlice, x.clientMeta.GetClientSlice()...)
-		} else {
-			clientSlice = append(clientSlice, nil)
-		}
-	} else {
-		// just use parent give me client
-		clientSlice = append(clientSlice, client)
-	}
-
-	// Create the client task execution context
-	clientTaskContextSlice := make([]*ClientTaskContext, 0)
-	for _, client := range clientSlice {
-		// expand task if necessary
-		if task.Table != nil && task.Table.ExpandClientTask != nil {
-			for _, clientTaskContext := range task.Table.ExpandClientTask(task.Ctx, x.clientMeta, client, task) {
-				if clientTaskContext.resultChannel == nil {
-					clientTaskContext.resultChannel = make(chan any, 1000)
-				}
-				// You can omit the task field, will use default task's clone
-				if clientTaskContext.Task == nil {
-					clientTaskContext.Task = task.Clone()
-				}
-				clientTaskContextSlice = append(clientTaskContextSlice, clientTaskContext)
-			}
-		} else {
-			clientTaskContextSlice = append(clientTaskContextSlice, &ClientTaskContext{
-				Client:        client,
-				Task:          task.Clone(),
-				resultChannel: make(chan any, 1000),
-			})
-		}
-	}
-	x.clientMeta.DebugF("taskId = %s, client task context create done, task count = %d", taskId, len(clientTaskContextSlice))
-	if len(clientTaskContextSlice) == 0 {
-		x.clientMeta.DebugF("taskId = %s, client task count equal zero, so ignored")
+	// just init client task context if it is not
+	if !task.IsExpandDone {
+		x.expandTask(context.Background(), task)
 		return
 	}
+
+	resultChannel := make(chan any, 10000)
 
 	// step 1. Start a coroutine that pulls data
 	// TODO The size of the channel that receives the result is determined dynamically
@@ -178,30 +155,25 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRo
 				x.clientMeta.Error(msg.String())
 
 			}
-			// close all result channel
-			for _, clientTaskContext := range clientTaskContextSlice {
-				close(clientTaskContext.resultChannel)
-			}
+			// close result channel
+			close(resultChannel)
 			wg.Done()
 
 			x.clientMeta.DebugF("taskId = %s, pull table done", taskId)
-
 		}()
 
-		for index, clientTaskContext := range clientTaskContextSlice {
-			clientBegin := time.Now()
-			x.clientMeta.DebugF("taskId = %s, clientIndex = %d, begin execution pull table...", taskId, index)
-			d := task.Table.DataSource.Pull(context.Background(), x.clientMeta, clientTaskContext.Client, clientTaskContext.Task, clientTaskContext.resultChannel)
+		clientBegin := time.Now()
+		x.clientMeta.DebugF("taskId = %s, begin execution pull table...", taskId)
+		d := task.Table.DataSource.Pull(context.Background(), x.clientMeta, task.Client, task, resultChannel)
 
-			clientCost := time.Now().Sub(clientBegin)
-			x.clientMeta.DebugF("taskId = %s, clientIndex = %d, execution pull table done, cost = %s", taskId, index, clientCost.String())
+		clientCost := time.Now().Sub(clientBegin)
+		x.clientMeta.DebugF("taskId = %s, execution pull table done, cost = %s", taskId, clientCost.String())
 
-			// send diagnostics if not ignore error
-			if x.errorsHandlerMeta.IsIgnore(IgnoredErrorOnPullTable) {
-				continue
-			} else if d != nil {
-				task.DiagnosticsChannel <- d
-			}
+		// send diagnostics if not ignore error
+		if x.errorsHandlerMeta.IsIgnore(IgnoredErrorOnPullTable) {
+			return
+		} else if d != nil {
+			task.DiagnosticsChannel <- d
 		}
 
 	}()
@@ -234,67 +206,63 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRo
 
 		}()
 
-		// evert client start one result channel consumer
-		for _, clientTaskContext := range clientTaskContextSlice {
-			localClientTaskContext := clientTaskContext
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		// collect result
+		for result := range resultChannel {
 
-				for result := range localClientTaskContext.resultChannel {
+			// drop nil result
+			if reflect_util.IsNil(result) {
+				x.clientMeta.DebugF("taskId = %s, return nil result, ignored it", taskId)
+				continue
+			}
 
-					// drop nil result
-					if reflect_util.IsNil(result) {
-						x.clientMeta.DebugF("taskId = %s, return nil result, ignored it", taskId)
-						continue
-					}
-
-					// run task result handler
-					rows, resultSlice, d := x.execResultHandlerWithRecover(task.Ctx, x.clientMeta, localClientTaskContext.Client, localClientTaskContext.Task, result)
-					if d != nil && d.HasError() {
-						if !isIgnorePullTableError {
-							task.DiagnosticsChannel <- d
-						}
-					} else {
-						task.DiagnosticsChannel <- d
-					}
-					if rows == nil || rows.IsEmpty() {
-						x.clientMeta.DebugF("taskId = %s, task result handler return nil rows", taskId)
-						continue
-					}
-
-					// The current table parsed to the result of matrix transformation, and divided into a number of only one row of matrices
-					rowSlice := rows.SplitRowByRow()
-					if len(rowSlice) != len(resultSlice) {
-						x.clientMeta.ErrorF("taskId = %s, len(rowSlice) != len(resultSlice)", taskId)
-						continue
-					}
-					for i := 0; i < len(rowSlice); i++ {
-						row := rowSlice[i]
-						result := resultSlice[i]
-						// Start a data pull task for each child table
-						for _, subTable := range task.Table.SubTables {
-							subTask := DataSourcePullTask{
-
-								TaskId: id_util.RandomId(),
-								Ctx:    localClientTaskContext.Task.Ctx,
-
-								ParentTask:      localClientTaskContext.Task,
-								ParentTable:     localClientTaskContext.Task.Table,
-								ParentRow:       row,
-								ParentRawResult: result,
-
-								Table:              subTable,
-								ResultHandler:      localClientTaskContext.Task.ResultHandler,
-								TaskDoneCallback:   localClientTaskContext.Task.TaskDoneCallback,
-								DiagnosticsChannel: localClientTaskContext.Task.DiagnosticsChannel,
-							}
-							x.clientMeta.DebugF("taskId = %s, start subTaskId = %s, parent row = %s, parent raw result = %s", subTask.TaskId, row, result)
-							x.execTask(&subTask, localClientTaskContext.Client, false)
-						}
-					}
+			// run task result handler
+			rows, resultSlice, d := x.execResultHandlerWithRecover(task.Ctx, x.clientMeta, task.Client, task, result)
+			if d != nil && d.HasError() {
+				if !isIgnorePullTableError {
+					task.DiagnosticsChannel <- d
 				}
-			}()
+			} else {
+				task.DiagnosticsChannel <- d
+			}
+			if rows == nil || rows.IsEmpty() {
+				x.clientMeta.DebugF("taskId = %s, task result handler return nil rows", taskId)
+				continue
+			}
+
+			// The current table parsed to the result of matrix transformation, and divided into a number of only one row of matrices
+			rowSlice := rows.SplitRowByRow()
+			if len(rowSlice) != len(resultSlice) {
+				x.clientMeta.ErrorF("taskId = %s, len(rowSlice) != len(resultSlice)", taskId)
+				continue
+			}
+			for i := 0; i < len(rowSlice); i++ {
+				row := rowSlice[i]
+				result := resultSlice[i]
+				// Start a data pull task for each child table
+				for _, subTable := range task.Table.SubTables {
+					subTask := &DataSourcePullTask{
+
+						TaskId: id_util.RandomId(),
+						Ctx:    task.Ctx,
+
+						ParentTask:      task,
+						ParentTable:     task.Table,
+						ParentRow:       row,
+						ParentRawResult: result,
+
+						Table:              subTable,
+						ResultHandler:      task.ResultHandler,
+						TaskDoneCallback:   task.TaskDoneCallback,
+						DiagnosticsChannel: task.DiagnosticsChannel,
+
+						IsRootTask:   false,
+						IsExpandDone: true,
+						Client:       task.Client,
+					}
+					x.clientMeta.DebugF("taskId = %s, start subTaskId = %s, parent row = %s, parent raw result = %s", subTask.TaskId, row, result)
+					x.Submit(context.Background(), subTask)
+				}
+			}
 		}
 	}()
 
@@ -302,7 +270,60 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask, client any, isRo
 	wg.Wait()
 
 	taskCost := time.Now().Sub(taskBegin)
-	x.clientMeta.DebugF("taskId = %s, execution done, cost = %s", taskCost.String())
+	x.clientMeta.DebugF("taskId = %s, execution done, cost = %s", taskId, taskCost.String())
+}
+
+// Expand the task, initialize the relevant task context, and so on
+func (x *DataSourceExecutor) expandTask(ctx context.Context, task *DataSourcePullTask) {
+
+	taskId := task.TaskId
+
+	x.clientMeta.DebugF("taskId = %s, begin expand...", taskId)
+
+	// compute client for execution task
+	clientSlice := make([]any, 0)
+	if len(x.clientMeta.GetClientSlice()) != 0 {
+		// just root task use all client
+		clientSlice = append(clientSlice, x.clientMeta.GetClientSlice()...)
+	} else {
+		clientSlice = append(clientSlice, nil)
+	}
+
+	// Create the client task execution context
+	clientTaskContextSlice := make([]*ClientTaskContext, 0)
+	for _, client := range clientSlice {
+		// expand task if necessary
+		if task.Table != nil && task.Table.ExpandClientTask != nil {
+			for _, clientTaskContext := range task.Table.ExpandClientTask(task.Ctx, x.clientMeta, client, task) {
+				// You can omit the task field, will use default task's clone
+				if clientTaskContext.Task == nil {
+					clientTaskContext.Task = task.Clone()
+				}
+				clientTaskContextSlice = append(clientTaskContextSlice, clientTaskContext)
+			}
+		} else {
+			clientTaskContextSlice = append(clientTaskContextSlice, &ClientTaskContext{
+				Client: client,
+				Task:   task.Clone(),
+			})
+		}
+	}
+	x.clientMeta.DebugF("taskId = %s, client task context create done, expand task count = %d", taskId, len(clientTaskContextSlice))
+	if len(clientTaskContextSlice) == 0 {
+		x.clientMeta.DebugF("taskId = %s, client task count equal zero, so ignored", taskId)
+		return
+	}
+
+	// send new task
+	for _, clientTaskContext := range clientTaskContextSlice {
+		expandTask := clientTaskContext.Task
+		// generate new task id
+		expandTask.TaskId = expandTask.TaskId + "-" + id_util.RandomId()
+		expandTask.Client = clientTaskContext.Client
+		expandTask.IsExpandDone = true
+		x.Submit(ctx, expandTask)
+	}
+
 }
 
 // Perform the task completion callback while capturing Panic
@@ -341,3 +362,102 @@ func (x *DataSourceExecutor) execResultHandlerWithRecover(ctx context.Context, c
 	rows, resultSlice, diagnostics = task.ResultHandler(ctx, x.clientMeta, client, task, result)
 	return
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+// DataSourcePullTaskQueue A dedicated task queue allows you to expand the task queue at will
+type DataSourcePullTaskQueue struct {
+	lock sync.RWMutex
+	list *singlylinkedlist.List
+}
+
+func NewDataSourcePullTaskQueue() *DataSourcePullTaskQueue {
+	return &DataSourcePullTaskQueue{
+		lock: sync.RWMutex{},
+		list: &singlylinkedlist.List{},
+	}
+}
+
+func (x *DataSourcePullTaskQueue) Add(task *DataSourcePullTask) {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
+	x.list.Add(task)
+}
+
+func (x *DataSourcePullTaskQueue) Take() *DataSourcePullTask {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
+	value, ok := x.list.Get(0)
+	if ok {
+		x.list.Remove(0)
+		return value.(*DataSourcePullTask)
+	} else {
+		return nil
+	}
+}
+
+func (x *DataSourcePullTaskQueue) IsEmpty() bool {
+	x.lock.RLock()
+	defer x.lock.RUnlock()
+
+	return x.list.Empty()
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+// ConsumerSemaphore Used to coordinate the work and exit of all consumers
+type ConsumerSemaphore struct {
+	lock                 sync.RWMutex
+	consumerIdleCountMap map[uint64]int
+}
+
+func NewConsumerSemaphore() *ConsumerSemaphore {
+	return &ConsumerSemaphore{
+		lock:                 sync.RWMutex{},
+		consumerIdleCountMap: make(map[uint64]int),
+	}
+}
+
+func (x *ConsumerSemaphore) Init(consumerId uint64) {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
+	x.consumerIdleCountMap[consumerId] = 0
+}
+
+func (x *ConsumerSemaphore) Running(consumerId uint64) {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
+	x.consumerIdleCountMap[consumerId] = 0
+}
+
+func (x *ConsumerSemaphore) Idle(consumerId uint64) {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
+	idleCount, exists := x.consumerIdleCountMap[consumerId]
+	if exists {
+		idleCount += 1
+	} else {
+		idleCount = 1
+	}
+	x.consumerIdleCountMap[consumerId] = idleCount
+}
+
+func (x *ConsumerSemaphore) IsAllConsumerDone() bool {
+	x.lock.RLock()
+	defer x.lock.RUnlock()
+
+	for _, idleCount := range x.consumerIdleCountMap {
+		if idleCount < 3 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// ---------------------------------------------------------------------------------------------------------------------

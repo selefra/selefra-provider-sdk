@@ -32,6 +32,13 @@ type DataSourcePullTask struct {
 	// You can pass some messages back at execution time
 	DiagnosticsChannel chan *Diagnostics
 
+	// Whether this task is a Root task
+	IsRootTask bool
+	// The client context required to perform the task
+	Client any
+	// Is the expansion completed?
+	IsExpandDone bool
+
 	itemMap     map[string]any
 	itemMapLock sync.RWMutex
 }
@@ -187,5 +194,9 @@ func (x *DataSourcePullTask) Clone() *DataSourcePullTask {
 
 		itemMap:     itemMap,
 		itemMapLock: sync.RWMutex{},
+
+		IsRootTask:   x.IsRootTask,
+		IsExpandDone: x.IsExpandDone,
+		Client:       x.Client,
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/selefra/selefra-provider-sdk/provider/transformer"
 	"github.com/selefra/selefra-provider-sdk/storage"
 	"github.com/selefra/selefra-provider-sdk/storage_factory"
+	"github.com/selefra/selefra-utils/pkg/id_util"
 	"github.com/selefra/selefra-utils/pkg/string_util"
 	"reflect"
 	"sync"
@@ -194,6 +195,7 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 	for _, table := range pullTables {
 
 		task := &schema.DataSourcePullTask{
+			TaskId:             id_util.RandomId(),
 			Ctx:                context.Background(),
 			Table:              table,
 			DiagnosticsChannel: diagnosticsChannel,
@@ -219,6 +221,9 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 
 				return nil
 			},
+			IsRootTask:   true,
+			IsExpandDone: false,
+			Client:       nil,
 		}
 		diagnostics.AddDiagnostics(dataSourceExecutor.Submit(context.Background(), task))
 		// taskId --> tableName relation, after just use taskId
