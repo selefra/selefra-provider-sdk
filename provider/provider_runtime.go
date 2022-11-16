@@ -153,7 +153,7 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 	}
 
 	// Calculate and verify the table to be pulled
-	pullTables, d := x.computeNeedPullTables(request.Tables)
+	pullTables, d := x.computeNeedPullRootTables(request.Tables)
 	if diagnostics.AddDiagnostics(d).HasError() {
 		return sender.Send(x.buildPullTablesResponseWithDiagnostics(diagnostics))
 	}
@@ -164,7 +164,7 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 		return sender.Send(x.buildPullTablesResponseWithDiagnostics(diagnostics))
 	}
 
-	totalTableCount := uint64(len(pullTables))
+	totalTableCount := x.computeAllNeedPullTablesCount(pullTables...)
 	finishTable := make(map[string]bool, 0)
 	finishTableLock := sync.RWMutex{}
 
@@ -372,7 +372,7 @@ func (x *ProviderRuntime) buildPullTablesResponseWithDiagnostics(diagnostics *sc
 const AllTableNameWildcard = "*"
 
 // Calculate which tables to pull, and do some checking and expansion
-func (x *ProviderRuntime) computeNeedPullTables(tableNames []string) ([]*schema.Table, *schema.Diagnostics) {
+func (x *ProviderRuntime) computeNeedPullRootTables(tableNames []string) ([]*schema.Table, *schema.Diagnostics) {
 
 	diagnostics := schema.NewDiagnostics()
 
@@ -407,4 +407,12 @@ func (x *ProviderRuntime) computeNeedPullTables(tableNames []string) ([]*schema.
 		}
 	}
 	return pullTables, diagnostics
+}
+
+func (x *ProviderRuntime) computeAllNeedPullTablesCount(tables ...*schema.Table) uint64 {
+	count := uint64(0)
+	for _, table := range tables {
+		count += 1 + x.computeAllNeedPullTablesCount(table.SubTables...)
+	}
+	return count
 }

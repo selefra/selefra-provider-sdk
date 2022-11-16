@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"github.com/selefra/selefra-provider-sdk/env"
 	"github.com/selefra/selefra-provider-sdk/grpc/shard"
 	"github.com/selefra/selefra-provider-sdk/provider/schema"
@@ -113,5 +114,51 @@ func Test_resultHandler(t *testing.T) {
 	assert.Equal(t, "9", rows.GetCellStringValueOrDefault(9, 0, ""))
 	assert.Equal(t, 9, rows.GetCellIntValueOrDefault(9, 1, 0))
 	assert.Equal(t, rows.RowCount(), len(slice))
+
+}
+
+func TestProviderRuntime_computeAllNeedPullTablesCount(t *testing.T) {
+
+	newRandomTable := func() *schema.Table {
+		return &schema.Table{
+			TableName: "test_table_for_provider_computeAllNeedPullTablesCount",
+			Columns: []*schema.Column{
+				&schema.Column{
+					ColumnName: "bar1",
+					Type:       schema.ColumnTypeString,
+					Extractor:  column_value_extractor.StructSelector("Bar1"),
+				},
+				&schema.Column{
+					ColumnName: "bar2",
+					Type:       schema.ColumnTypeInt,
+					Extractor:  column_value_extractor.StructSelector("Bar2"),
+				},
+			},
+		}
+	}
+
+	table := newRandomTable()
+	table.SubTables = append(table.SubTables, newRandomTable())
+	table.SubTables = append(table.SubTables, newRandomTable())
+	table.SubTables = append(table.SubTables, newRandomTable())
+
+	table.SubTables[0].SubTables = append(table.SubTables[0].SubTables, newRandomTable())
+	table.SubTables[0].SubTables = append(table.SubTables[0].SubTables, newRandomTable())
+	table.SubTables[0].SubTables = append(table.SubTables[0].SubTables, newRandomTable())
+
+	provider := &Provider{
+		Name:    "test-provider",
+		Version: "v0.1",
+		TableList: []*schema.Table{
+			table,
+		},
+		TransformerMeta: schema.TransformerMeta{
+			DataSourcePullResultAutoExpand: true,
+		},
+	}
+
+	runtime, _ := NewProviderRuntime(context.Background(), provider)
+	count := runtime.computeAllNeedPullTablesCount(table)
+	fmt.Println(count)
 
 }
