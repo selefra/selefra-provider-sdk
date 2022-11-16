@@ -6,7 +6,8 @@ import (
 )
 
 type PostgresqlStorageOptions struct {
-	DSN string
+	ConnectionString string
+	SearchPath       string
 }
 
 var _ storage.CreateStorageOptions = &PostgresqlStorageOptions{}
@@ -23,8 +24,8 @@ func (x *PostgresqlStorageOptions) FromJsonString(jsonString string) error {
 	return json.Unmarshal([]byte(jsonString), x)
 }
 
-func NewPostgresqlStorageOptions(dsn string) *PostgresqlStorageOptions {
+func NewPostgresqlStorageOptions(connectionString string) *PostgresqlStorageOptions {
 	return &PostgresqlStorageOptions{
-		DSN: dsn,
+		ConnectionString: connectionString,
 	}
 }
