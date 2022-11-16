@@ -16,6 +16,7 @@ type PostgresqlStorage struct {
 	*PostgresqlTransactionExecutor
 	*PostgresqlTableAdmin
 	*PostgresqlNamespaceAdmin
+	*PostgresqlKeyValueExecutor
 
 	pool       *pgxpool.Pool
 	clientMeta *schema.ClientMeta
@@ -41,6 +42,7 @@ func NewPostgresqlStorage(ctx context.Context, options *PostgresqlStorageOptions
 	}
 	postgresqlStorage.PostgresqlTableAdmin = NewPostgresqlTableAdmin(postgresqlStorage.PostgresqlCRUDExecutor)
 	postgresqlStorage.PostgresqlNamespaceAdmin = NewPostgresqlNamespaceAdmin(postgresqlStorage.PostgresqlCRUDExecutor)
+	postgresqlStorage.PostgresqlKeyValueExecutor = NewPostgresqlKeyValueExecutor(postgresqlStorage.PostgresqlCRUDExecutor)
 	return postgresqlStorage, nil
 }
 
@@ -87,6 +89,9 @@ func connectToPostgresqlServer(ctx context.Context, pgOptions *PostgresqlStorage
 				return err
 			}
 		}
+
+		// ensure key / value db exists
+		ensureKeyValueTableExists(ctx, conn)
 
 		return nil
 	}
