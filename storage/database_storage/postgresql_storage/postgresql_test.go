@@ -11,6 +11,7 @@ import (
 )
 
 var testCrudExecutor *PostgresqlCRUDExecutor
+var testKeyValueExecutor *PostgresqlKeyValueExecutor
 var testTableAdmin *PostgresqlTableAdmin
 var testNamespaceAdmin *PostgresqlNamespaceAdmin
 
@@ -30,8 +31,12 @@ func TestMain(m *testing.M) {
 		SearchPath:       "",
 	})
 	assert.True(nil, diagnostics == nil || !diagnostics.HasError())
+
 	testCrudExecutor = NewPostgresqlCRUDExecutor(pool)
 	testCrudExecutor.SetClientMeta(&clientMeta)
+
+	testKeyValueExecutor = NewPostgresqlKeyValueExecutor(testCrudExecutor)
+
 	testTableAdmin = NewPostgresqlTableAdmin(testCrudExecutor)
 	testNamespaceAdmin = NewPostgresqlNamespaceAdmin(testCrudExecutor)
 

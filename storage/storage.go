@@ -30,6 +30,8 @@ type Storage interface {
 	GetStorageConnection() any
 
 	UseClientMeta
+
+	KeyValueExecutor
 }
 
 type UseClientMeta interface {
@@ -73,4 +75,14 @@ type CRUDExecutor interface {
 	Exec(ctx context.Context, query string, args ...any) *schema.Diagnostics
 
 	Insert(ctx context.Context, t *schema.Table, rowSet *schema.Rows) *schema.Diagnostics
+}
+
+type KeyValueExecutor interface {
+	SetKey(ctx context.Context, key, value string) *schema.Diagnostics
+
+	GetValue(ctx context.Context, key string) (string, *schema.Diagnostics)
+
+	DeleteKey(ctx context.Context, key string) *schema.Diagnostics
+
+	ListKey(ctx context.Context) (*schema.Rows, *schema.Diagnostics)
 }
