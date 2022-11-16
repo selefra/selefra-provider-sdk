@@ -15,7 +15,6 @@ var testTableAdmin *PostgresqlTableAdmin
 var testNamespaceAdmin *PostgresqlNamespaceAdmin
 
 func TestMain(m *testing.M) {
-
 	diagnostics := schema.NewDiagnostics()
 
 	workspace := "."
@@ -26,7 +25,10 @@ func TestMain(m *testing.M) {
 	}
 	_ = reflect_util.SetStructPtrUnExportedStrField(&clientMeta, "runtime", clientMetaRuntime)
 
-	pool, diagnostics := connectToPostgresqlServer(context.Background(), env.GetDatabaseDsn())
+	pool, diagnostics := connectToPostgresqlServer(context.Background(), &PostgresqlStorageOptions{
+		ConnectionString: env.GetDatabaseDsn(),
+		SearchPath:       "",
+	})
 	assert.True(nil, diagnostics == nil || !diagnostics.HasError())
 	testCrudExecutor = NewPostgresqlCRUDExecutor(pool)
 	testCrudExecutor.SetClientMeta(&clientMeta)
@@ -35,4 +37,5 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 	os.Exit(code)
+
 }
