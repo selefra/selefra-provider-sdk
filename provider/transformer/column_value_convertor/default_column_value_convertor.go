@@ -981,6 +981,9 @@ func ConvertToTimestamp(columnValue any, formats ...TimeFormat) (*time.Time, err
 		//if _, exists := validStringBlackSet[v]; exists {
 		//	return nil, nil
 		//}
+		if v == "" {
+			return nil, nil
+		}
 		return parseDateWith(v, time.Local, timeFormats...)
 	case json.Number:
 		s, err1 := convertToBigInt(v)
