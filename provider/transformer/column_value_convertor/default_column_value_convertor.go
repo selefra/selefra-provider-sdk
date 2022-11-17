@@ -183,6 +183,9 @@ func convertToSmallInt(columnValue any) (any, error) {
 		//if _, exists := validStringBlackSet[s]; exists {
 		//	return nil, nil
 		//}
+		if s == "" {
+			return nil, nil
+		}
 		v, err := strconv.ParseInt(trimZeroDecimal(s), 0, 0)
 		if err == nil {
 			return int16(v), nil
@@ -303,6 +306,9 @@ func convertToInt(columnValue any) (any, error) {
 		//if _, exists := validStringBlackSet[s]; exists {
 		//	return nil, nil
 		//}
+		if s == "" {
+			return nil, nil
+		}
 		v, err := strconv.ParseInt(trimZeroDecimal(s), 0, 0)
 		if err == nil {
 			return int(v), nil
@@ -338,14 +344,18 @@ func convertToIntSlice(columnValue any) (any, error) {
 	switch v := columnValue.(type) {
 	case []int:
 		return v, nil
-		//case *string:
-		//	//if _, exists := validStringBlackSet[*v]; exists {
-		//	//	return nil, nil
-		//	//}
-		//case string:
-		//	if _, exists := validStringBlackSet[v]; exists {
-		//		return nil, nil
-		//	}
+	//case *string:
+	//	//if _, exists := validStringBlackSet[*v]; exists {
+	//	//	return nil, nil
+	//	//}
+	//case string:
+	//	if _, exists := validStringBlackSet[v]; exists {
+	//		return nil, nil
+	//	}
+	case string:
+		if v == "" {
+			return nil, nil
+		}
 	}
 
 	reflectValue := reflect.ValueOf(columnValue)
@@ -409,6 +419,9 @@ func convertToBigInt(columnValue any) (any, error) {
 		//if _, exists := validStringBlackSet[s]; exists {
 		//	return nil, nil
 		//}
+		if s == "" {
+			return nil, nil
+		}
 		v, err := strconv.ParseInt(trimZeroDecimal(s), 0, 0)
 		if err == nil {
 			return v, nil
@@ -477,6 +490,10 @@ func convertToFloat(columnValue any) (any, error) {
 		//if _, exists := validStringBlackSet[s]; exists {
 		//	return nil, nil
 		//}
+		if s == "" {
+			return nil, nil
+		}
+
 		v, err := strconv.ParseFloat(s, 64)
 		if err == nil {
 			return v, nil
@@ -536,6 +553,9 @@ func convertToBool(columnValue any) (any, error) {
 		//if _, exists := validStringBlackSet[b]; exists {
 		//	return nil, nil
 		//}
+		if b == "" {
+			return nil, nil
+		}
 		return strconv.ParseBool(v.(string))
 	case json.Number:
 		v, err := convertToBigInt(b)
@@ -749,6 +769,9 @@ func convertToStringSlice(columnValue any) (any, error) {
 		//if _, exists := validStringBlackSet[v]; exists {
 		//	return nil, nil
 		//}
+		if v == "" {
+			return nil, nil
+		}
 		return strings.Fields(v), nil
 	case *string:
 		//if _, exists := validStringBlackSet[*v]; exists {
@@ -814,6 +837,9 @@ func convertToByte(columnValue any) (any, error) {
 
 	switch s := v.(type) {
 	case string:
+		if s == "" {
+			return nil, nil
+		}
 		v, err := strconv.ParseInt(trimZeroDecimal(s), 0, 0)
 		if err == nil {
 			if v < 0 {
@@ -888,6 +914,10 @@ func convertToByteArray(columnValue any) (any, error) {
 	switch v := columnValue.(type) {
 	case []byte:
 		return v, nil
+	case string:
+		if v == "" {
+			return nil, nil
+		}
 	}
 
 	value := reflect.ValueOf(columnValue)
@@ -1039,6 +1069,10 @@ func ConvertToTimestamp(columnValue any, formats ...TimeFormat) (*time.Time, err
 
 func parseDateWith(s string, location *time.Location, formats ...TimeFormat) (*time.Time, error) {
 
+	if s == "" {
+		return nil, nil
+	}
+
 	for _, format := range formats {
 		d, e := time.Parse(format.Formatter, s)
 		if e == nil {
@@ -1064,6 +1098,14 @@ func parseDateWith(s string, location *time.Location, formats ...TimeFormat) (*t
 // ------------------------------------------------- MacAddr -----------------------------------------------------------
 
 func convertToMacAddr(columnValue any) (any, error) {
+
+	switch v := columnValue.(type) {
+	case string:
+		if v == "" {
+			return nil, nil
+		}
+	}
+
 	macString, err := cast.ToStringE(columnValue)
 	if err != nil {
 		return nil, err
@@ -1072,6 +1114,14 @@ func convertToMacAddr(columnValue any) (any, error) {
 }
 
 func convertToMacAddrArray(columnValue any) (any, error) {
+
+	switch v := columnValue.(type) {
+	case string:
+		if v == "" {
+			return nil, nil
+		}
+	}
+
 	macStringSlice, err := cast.ToStringSliceE(columnValue)
 	if err != nil {
 		return nil, err
@@ -1097,6 +1147,10 @@ func convertToCIDR(columnValue any) (any, error) {
 		return v, nil
 	case net.IPNet:
 		return &v, nil
+	case string:
+		if v == "" {
+			return nil, nil
+		}
 	}
 
 	sip, err := cast.ToStringE(columnValue)
@@ -1134,6 +1188,10 @@ func convertToCIDRArray(columnValue any) (any, error) {
 		return []*net.IPNet{v}, nil
 	case net.IPNet:
 		return []*net.IPNet{&v}, nil
+	case string:
+		if v == "" {
+			return nil, nil
+		}
 	}
 
 	sips, err := cast.ToStringSliceE(columnValue)
@@ -1163,6 +1221,10 @@ func convertToIp(columnValue any) (any, error) {
 		return v, nil
 	case *net.IP:
 		return *v, nil
+	case string:
+		if v == "" {
+			return nil, nil
+		}
 	}
 
 	ipString, err := cast.ToStringE(columnValue)
@@ -1206,6 +1268,10 @@ func convertToIpArray(columnValue any) (any, error) {
 			res[i] = *(*v)[i]
 		}
 		return res, nil
+	case string:
+		if v == "" {
+			return nil, nil
+		}
 	}
 
 	var sips []string

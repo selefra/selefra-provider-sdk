@@ -272,6 +272,10 @@ func Test_convertToBool(t *testing.T) {
 	assert.NotNil(t, v)
 	assert.True(t, v.(bool))
 
+	v, err = convertToBool("")
+	assert.Nil(t, err)
+	assert.Nil(t, v)
+
 }
 
 func Test_convertToStringSlice(t *testing.T) {
