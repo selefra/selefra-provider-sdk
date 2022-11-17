@@ -149,18 +149,22 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 
 	// Data sources must be initialized before resources can be pulled
 	if x.storage == nil {
-		return sender.Send(x.buildPullTablesResponseWithDiagnostics(diagnostics.AddErrorMsg(errorMessageStorageNotInit)))
+		diagnostics.AddErrorMsg(errorMessageStorageNotInit)
+		x.myProvider.ClientMeta.DebugF("pull table exit, occur error: %s", diagnostics.ToString())
+		return sender.Send(x.buildPullTablesResponseWithDiagnostics(diagnostics))
 	}
 
 	// Calculate and verify the table to be pulled
 	pullTables, d := x.computeNeedPullRootTables(request.Tables)
 	if diagnostics.AddDiagnostics(d).HasError() {
+		x.myProvider.ClientMeta.DebugF("pull table exit, occur error: %s", diagnostics.ToString())
 		return sender.Send(x.buildPullTablesResponseWithDiagnostics(diagnostics))
 	}
 
 	// Create a data source task actuator
 	dataSourceExecutor, d := schema.NewDataSourcePullExecutor(request.MaxGoroutines, &x.myProvider.ClientMeta, &x.myProvider.ErrorsHandlerMeta)
 	if diagnostics.AddDiagnostics(d).HasError() {
+		x.myProvider.ClientMeta.DebugF("pull table exit, occur error: %s", diagnostics.ToString())
 		return sender.Send(x.buildPullTablesResponseWithDiagnostics(diagnostics))
 	}
 
@@ -215,9 +219,11 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 				})
 
 				if err != nil {
-					clientMeta.DebugF("taskId = %s, send rpc error: %s", task.TaskId, err)
+					clientMeta.ErrorF("taskId = %s, send rpc error: %s", task.TaskId, err)
 					return schema.NewDiagnostics().AddErrorMsg("table %s task done, send rpc error: %s", task.Table.TableName, err.Error())
 				}
+
+				clientMeta.DebugF("taskId = %s, table = %s, send finished rpc done.", table.TableName, task.TaskId)
 
 				return nil
 			},
@@ -235,6 +241,8 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 
 	close(diagnosticsChannel)
 	wg.Wait()
+
+	x.myProvider.ClientMeta.DebugF("pull table queue done, exit function")
 
 	return nil
 }
@@ -395,7 +403,7 @@ func (x *ProviderRuntime) computeNeedPullRootTables(tableNames []string) ([]*sch
 			// If it is not a wildcard character, it is a common table name
 			table, exists := x.tableMap[tableName]
 			if !exists {
-				return nil, diagnostics.AddErrorMsg("pull provider %s's table failed, because table %s not exists", x.myProvider.Name, tableNames)
+				return nil, diagnostics.AddErrorMsg("pull provider %s's table failed, because table %s not exists or it is not root table", x.myProvider.Name, tableName)
 			}
 
 			// distinct
