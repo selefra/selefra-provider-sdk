@@ -12,8 +12,9 @@ See [Docs](https://selefra.io/docs) for best practices and detailed instructions
 
 Selefra is a community-driven project, we welcome you to open a [GitHub Issue](https://github.com/selefra/selefra/issues/new/choose) to report a bug, suggest an improvement, or request new feature.
 
--  Join [Selefra Community](https://selefra.slack.com) on Slack. We host `Community Hour` for tutorials and Q&As on regular basis.
+-  Join [Selefra Community](https://selefra.io/community/join) on Slack. We host `Community Hour` for tutorials and Q&As on regular basis.
 -  Follow us on [Twitter](https://twitter.com/SelefraCorp) and share your thoughts！
+-  Email us at support@selefra.io
 
 ## CONTRIBUTING
 
