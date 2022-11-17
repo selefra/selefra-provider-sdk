@@ -943,6 +943,10 @@ var (
 		{"2006-01-02T15:04:05-0700", TimeFormatNumericTimezone},                        // RFC3339 without timezone hh:mm colon
 		{"2006-01-02 15:04:05Z0700", TimeFormatNumericTimezone},                        // RFC3339 without T or timezone hh:mm colon
 		{"2006-01-02 15:04:05", TimeFormatNoTimezone},
+
+		// 2022-10-24T08:01Z
+		{"2006-01-02T15:04Z", TimeFormatNoTimezone},
+
 		{time.ANSIC, TimeFormatNoTimezone},
 		{time.UnixDate, TimeFormatNamedTimezone},
 		{time.RubyDate, TimeFormatNumericTimezone},

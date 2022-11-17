@@ -205,6 +205,10 @@ func Test_convertToTimestamp(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, s, v.Format("2006-01-02 15:04:05"))
 
+	v, err = ConvertToTimestamp("2022-10-24T08:01Z")
+	assert.Nil(t, err)
+	assert.Equal(t, "2022-10-24 08:01:00", v.Format("2006-01-02 15:04:05"))
+
 }
 
 func Test_convertToString(t *testing.T) {
