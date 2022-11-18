@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"sync"
+
+	"github.com/selefra/selefra-utils/pkg/id_util"
+	"github.com/selefra/selefra-utils/pkg/string_util"
+
 	"github.com/selefra/selefra-provider-sdk/grpc/shard"
 	"github.com/selefra/selefra-provider-sdk/provider/schema"
 	"github.com/selefra/selefra-provider-sdk/provider/transformer"
 	"github.com/selefra/selefra-provider-sdk/storage"
 	"github.com/selefra/selefra-provider-sdk/storage_factory"
-	"github.com/selefra/selefra-utils/pkg/id_util"
-	"github.com/selefra/selefra-utils/pkg/string_util"
-	"reflect"
-	"sync"
 )
 
 // ProviderRuntime provider's runtime, most of the runtime logic is encapsulated here
@@ -388,24 +390,16 @@ func (x *ProviderRuntime) computeNeedPullRootTables(tableNames []string) ([]*sch
 	pullTableNameSet := make(map[string]struct{}, 0)
 	// What are the tables to pull
 	pullTables := make([]*schema.Table, 0)
-	for _, tableName := range tableNames {
-		if tableName == AllTableNameWildcard {
-			// If it is a wildcard, expand it
-			for tableName, table := range x.tableMap {
-				// distinct
-				if _, exists := pullTableNameSet[tableName]; exists {
-					continue
-				}
-				pullTables = append(pullTables, table)
-				pullTableNameSet[tableName] = struct{}{}
-			}
-		} else {
-			// If it is not a wildcard character, it is a common table name
-			table, exists := x.tableMap[tableName]
-			if !exists {
-				return nil, diagnostics.AddErrorMsg("pull provider %s's table failed, because table %s not exists or it is not root table", x.myProvider.Name, tableName)
-			}
 
+	var isAllTableNameWildcard bool
+
+	for _, tableName := range tableNames {
+		if tableName != AllTableNameWildcard {
+			continue
+		}
+		isAllTableNameWildcard = true
+		// If it is a wildcard, expand it
+		for tableName, table := range x.tableMap {
 			// distinct
 			if _, exists := pullTableNameSet[tableName]; exists {
 				continue
@@ -414,6 +408,32 @@ func (x *ProviderRuntime) computeNeedPullRootTables(tableNames []string) ([]*sch
 			pullTableNameSet[tableName] = struct{}{}
 		}
 	}
+	if !isAllTableNameWildcard {
+		// nowTable: rootTable
+		subTableDependency := make(map[string]string, 0)
+		for tableName, table := range x.tableMap {
+			for _, subTableName := range x.subTable(table) {
+				subTableDependency[subTableName] = tableName
+			}
+		}
+
+		for _, tableName := range tableNames {
+			// If it is not a wildcard character, it is a common table name
+			rootTableName, exists := subTableDependency[tableName]
+			if !exists {
+				return nil, diagnostics.AddErrorMsg("pull provider %s's table failed, because table %s not exists or it is not root table", x.myProvider.Name, tableName)
+			}
+
+			// distinct
+			if _, exists := pullTableNameSet[rootTableName]; exists {
+				continue
+			}
+			pullTables = append(pullTables, x.tableMap[rootTableName])
+			pullTableNameSet[rootTableName] = struct{}{}
+
+		}
+	}
+
 	return pullTables, diagnostics
 }
 
@@ -423,4 +443,15 @@ func (x *ProviderRuntime) computeAllNeedPullTablesCount(tables ...*schema.Table)
 		count += 1 + x.computeAllNeedPullTablesCount(table.SubTables...)
 	}
 	return count
+}
+
+func (x *ProviderRuntime) subTable(table *schema.Table) []string {
+	if table == nil {
+		return nil
+	}
+	subTables := []string{table.TableName}
+	for _, subTable := range table.SubTables {
+		subTables = append(subTables, x.subTable(subTable)...)
+	}
+	return subTables
 }
