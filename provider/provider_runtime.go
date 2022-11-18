@@ -407,6 +407,7 @@ func (x *ProviderRuntime) computeNeedPullRootTables(tableNames []string) ([]*sch
 			pullTables = append(pullTables, table)
 			pullTableNameSet[tableName] = struct{}{}
 		}
+		break
 	}
 	if !isAllTableNameWildcard {
 		// nowTable: rootTable
