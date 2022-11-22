@@ -67,7 +67,7 @@ func connectToPostgresqlServer(ctx context.Context, pgOptions *PostgresqlStorage
 			}
 
 			if !exists {
-				_, err := conn.Exec(ctx, fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s AUTHORIZATION postgres", pgOptions.SearchPath))
+				_, err := conn.Exec(ctx, fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s AUTHORIZATION CURRENT_USER", pgOptions.SearchPath))
 				if err != nil {
 					return err
 				}
