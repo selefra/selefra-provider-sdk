@@ -1329,7 +1329,12 @@ func convertToJson(columnValue any) (any, error) {
 func convertToJsonString(columnValue any) (string, error) {
 	switch v := columnValue.(type) {
 	case string:
-		return v, nil
+		// if it is normal single string, just convert it to string type json array
+		if !strings.HasPrefix(v, "{") && !strings.HasPrefix(v, "[") {
+			return fmt.Sprintf("[\"%s\"]", v), nil
+		} else {
+			return v, nil
+		}
 	case *string:
 		if columnValue == nil {
 			return "", nil
