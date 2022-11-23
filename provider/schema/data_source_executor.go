@@ -362,7 +362,7 @@ func (x *DataSourceExecutor) execResultHandlerWithRecover(ctx context.Context, c
 	// A task may have many results. In order to avoid a single instance affecting each other, creating a copy of the
 	// task is equivalent to isolating the task context of the different results
 	task = task.Clone()
-	task.RawResult = result
+	task.NotExpandRawResult = result
 	rows, resultSlice, diagnostics = task.ResultHandler(ctx, x.clientMeta, client, task, result)
 	return
 }

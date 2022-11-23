@@ -23,7 +23,7 @@ type DataSourcePullTask struct {
 
 	// Only if the task is successfully executed will the raw result be backfilled here
 	// This is so that when a task result is expand, there is a way to access the before expand results if you need to
-	RawResult any
+	NotExpandRawResult any
 
 	Table *Table
 
@@ -192,7 +192,7 @@ func (x *DataSourcePullTask) Clone() *DataSourcePullTask {
 		ParentRawResult: x.ParentRawResult,
 
 		Table:              x.Table,
-		RawResult:          x.RawResult,
+		NotExpandRawResult: x.NotExpandRawResult,
 		ResultHandler:      x.ResultHandler,
 		TaskDoneCallback:   x.TaskDoneCallback,
 		DiagnosticsChannel: x.DiagnosticsChannel,
