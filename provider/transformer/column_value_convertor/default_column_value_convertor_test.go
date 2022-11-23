@@ -289,3 +289,10 @@ func Test_convertToStringSlice(t *testing.T) {
 	t.Log(stringSlice)
 
 }
+
+func Test_convertToJsonString(t *testing.T) {
+	s := "foobar"
+	jsonString, err := convertToJsonString(s)
+	assert.Nil(t, err)
+	assert.Equal(t, "[\"foobar\"]", jsonString)
+}
