@@ -1062,6 +1062,25 @@ func ConvertToTimestamp(columnValue any, formats ...TimeFormat) (*time.Time, err
 		if value.Elem().IsValid() {
 			return ConvertToTimestamp(value.Elem().Interface())
 		}
+	default:
+		// Some custom date types, to be able to be compatible
+		method := value.MethodByName("Format")
+		if !method.IsValid() {
+			return nil, nil
+		}
+		callResultSlice := method.Call([]reflect.Value{reflect.ValueOf("2006-01-02 15:04:05")})
+		if len(callResultSlice) == 0 {
+			return nil, nil
+		}
+		timeFormatResult := callResultSlice[0].String()
+		if timeFormatResult == "" {
+			return nil, nil
+		}
+		timeParsedResult, err := time.Parse("2006-01-02 15:04:05", timeFormatResult)
+		if err != nil {
+			return nil, err
+		}
+		return &timeParsedResult, nil
 	}
 
 	return nil, fmt.Errorf("unable to cast %#v of type %T to Time", v, v)
