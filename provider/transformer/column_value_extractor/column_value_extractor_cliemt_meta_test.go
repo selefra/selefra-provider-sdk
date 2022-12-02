@@ -12,7 +12,7 @@ func TestColumnValueExtractorClientMeta(t *testing.T) {
 
 	// build client meta for test
 	clientMeta := &schema.ClientMeta{}
-	runtime, _ := schema.NewClientMetaRuntime(context.Background(), "./", "test", clientMeta, nil, true)
+	runtime, _ := schema.NewClientMetaRuntime(context.Background(), "./", "test", "v0.0.1",clientMeta, nil, true)
 	_ = reflect_util.SetStructPtrUnExportedStrField(clientMeta, "runtime", runtime)
 	clientMeta.SetItem("foo", "bar")
 

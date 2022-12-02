@@ -16,7 +16,7 @@ func TestClientMeta_GetIntItem_execInitClient(t *testing.T) {
 			return nil, nil
 		},
 	}
-	runtime, d := NewClientMetaRuntime(context.Background(), "./", "test", meta, nil, true)
+	runtime, d := NewClientMetaRuntime(context.Background(), "./", "test", "v0.0.1", meta, nil, true)
 	assert.False(t, diagnostics.Add(d).HasError())
 	assert.NotNil(t, runtime)
 
@@ -26,7 +26,7 @@ func TestClientMeta_GetIntItem_execInitClient(t *testing.T) {
 			panic("something wrong")
 		},
 	}
-	runtime, d = NewClientMetaRuntime(context.Background(), "./", "test", meta, nil, true)
+	runtime, d = NewClientMetaRuntime(context.Background(), "./", "test", "v0.0.1",meta, nil, true)
 	assert.True(t, diagnostics.Add(d).HasError())
 	assert.Nil(t, runtime)
 }
@@ -40,7 +40,7 @@ func TestClientMeta_GetIntItem_execInitLogger(t *testing.T) {
 			return nil, nil
 		},
 	}
-	runtime, d := NewClientMetaRuntime(context.Background(), "./", "test", meta, nil, true)
+	runtime, d := NewClientMetaRuntime(context.Background(), "./", "test", "v0.0.1",meta, nil, true)
 	assert.False(t, diagnostics.Add(d).HasError())
 	assert.NotNil(t, runtime)
 
@@ -50,7 +50,7 @@ func TestClientMeta_GetIntItem_execInitLogger(t *testing.T) {
 			panic("something wrong, wrong...")
 		},
 	}
-	runtime, d = NewClientMetaRuntime(context.Background(), "./", "test", meta, nil, true)
+	runtime, d = NewClientMetaRuntime(context.Background(), "./", "test", "v0.0.1",meta, nil, true)
 	assert.True(t, diagnostics.Add(d).HasError())
 	assert.Nil(t, runtime)
 }
