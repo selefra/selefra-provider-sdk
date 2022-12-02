@@ -28,7 +28,12 @@ func NewClientMetaRuntime(ctx context.Context, workspace, providerName, provider
 	diagnostics = NewDiagnostics()
 	runtime = &ClientMetaRuntime{
 		myClientMeta: myClientMeta,
+		// save workspace
+		Workspace:       workspace,
+		ProviderName:    providerName,
+		ProviderVersion: providerVersion,
 	}
+
 	myClientMeta.runtime = runtime
 
 	// bind context can not be nil
@@ -60,11 +65,6 @@ func NewClientMetaRuntime(ctx context.Context, workspace, providerName, provider
 			return nil, diagnostics
 		}
 	}
-
-	// save workspace
-	runtime.Workspace = workspace
-	runtime.ProviderName = providerName
-	runtime.ProviderVersion = providerVersion
 
 	return
 }
