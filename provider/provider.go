@@ -107,7 +107,7 @@ func (x *Provider) SetProviderConfig(ctx context.Context, request *shard.SetProv
 	x.ConfigMeta.runtime.UpdateProviderConfig(ctx, request.ProviderConfig)
 
 	// 2. init ClientMeta, must after init config
-	clientMetaRuntime, d := schema.NewClientMetaRuntime(ctx, x.runtime.workspace, x.Name, &x.ClientMeta, x.ConfigMeta.runtime.providerConfigViper, true)
+	clientMetaRuntime, d := schema.NewClientMetaRuntime(ctx, x.runtime.workspace, x.Name, x.Version, &x.ClientMeta, x.ConfigMeta.runtime.providerConfigViper, true)
 	if diagnostics.AddDiagnostics(d).HasError() {
 		return &shard.SetProviderConfigResponse{
 			Diagnostics: diagnostics,
@@ -193,7 +193,7 @@ func (x *Provider) Init(ctx context.Context, request *shard.ProviderInitRequest)
 	x.ConfigMeta.runtime = configRuntime
 
 	// init client meta, must after config init done, if on init give provider configuration, then init user's meta function, or else just init myself log
-	clientMetaRuntime, d := schema.NewClientMetaRuntime(ctx, x.runtime.workspace, x.Name, &x.ClientMeta, configRuntime.providerConfigViper, len(configRuntime.providerConfigViper.AllKeys()) != 0)
+	clientMetaRuntime, d := schema.NewClientMetaRuntime(ctx, x.runtime.workspace, x.Name, x.Version, &x.ClientMeta, configRuntime.providerConfigViper, len(configRuntime.providerConfigViper.AllKeys()) != 0)
 	if diagnostics.AddDiagnostics(d).HasError() {
 		return &shard.ProviderInitResponse{
 			Diagnostics: diagnostics,

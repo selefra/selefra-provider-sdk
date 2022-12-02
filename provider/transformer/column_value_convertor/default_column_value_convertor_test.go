@@ -12,7 +12,7 @@ import (
 func Test_Convert(t *testing.T) {
 	diagnostics := schema.NewDiagnostics()
 	clientMeta := schema.ClientMeta{}
-	runtime, d := schema.NewClientMetaRuntime(context.Background(), "./", "test", &clientMeta, nil, true)
+	runtime, d := schema.NewClientMetaRuntime(context.Background(), "./", "test", "v0.0.1", &clientMeta, nil, true)
 	assert.False(t, diagnostics.Add(d).HasError())
 	_ = reflect_util.SetStructPtrUnExportedStrField(&clientMeta, "runtime", runtime)
 

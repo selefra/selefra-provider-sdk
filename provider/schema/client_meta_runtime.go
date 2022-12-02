@@ -19,10 +19,12 @@ type ClientMetaRuntime struct {
 	itemMap     map[string]any
 	itemMapLock sync.RWMutex
 
-	Workspace string
+	ProviderName    string
+	ProviderVersion string
+	Workspace       string
 }
 
-func NewClientMetaRuntime(ctx context.Context, workspace, providerName string, myClientMeta *ClientMeta, providerConfigViper *viper.Viper, isRunUserMetaInit bool) (runtime *ClientMetaRuntime, diagnostics *Diagnostics) {
+func NewClientMetaRuntime(ctx context.Context, workspace, providerName, providerVersion string, myClientMeta *ClientMeta, providerConfigViper *viper.Viper, isRunUserMetaInit bool) (runtime *ClientMetaRuntime, diagnostics *Diagnostics) {
 	diagnostics = NewDiagnostics()
 	runtime = &ClientMetaRuntime{
 		myClientMeta: myClientMeta,
@@ -61,6 +63,8 @@ func NewClientMetaRuntime(ctx context.Context, workspace, providerName string, m
 
 	// save workspace
 	runtime.Workspace = workspace
+	runtime.ProviderName = providerName
+	runtime.ProviderVersion = providerVersion
 
 	return
 }

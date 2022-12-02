@@ -20,7 +20,7 @@ func TestMain(m *testing.M) {
 
 	workspace := "."
 	clientMeta := schema.ClientMeta{}
-	clientMetaRuntime, d := schema.NewClientMetaRuntime(context.Background(), workspace, "test", &clientMeta, nil, true)
+	clientMetaRuntime, d := schema.NewClientMetaRuntime(context.Background(), workspace, "test", "v0.0.1",&clientMeta, nil, true)
 	if diagnostics.Add(d).HasError() {
 		panic(diagnostics.ToString())
 	}
