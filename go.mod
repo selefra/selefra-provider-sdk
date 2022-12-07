@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/squirrel v1.5.3
 	github.com/doug-martin/goqu/v9 v9.18.0
 	github.com/emirpasic/gods v1.18.1
-	github.com/hashicorp/go-plugin v1.4.5
+	github.com/hashicorp/go-plugin v1.4.7
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/satori/go.uuid v1.2.0
