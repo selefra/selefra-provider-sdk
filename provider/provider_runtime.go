@@ -411,18 +411,19 @@ func (x *ProviderRuntime) computeNeedPullRootTables(tableNames []string) ([]*sch
 	}
 	if !isAllTableNameWildcard {
 		// nowTable: rootTable
-		subTableDependency := make(map[string]string, 0)
-		for tableName, table := range x.tableMap {
-			for _, subTableName := range x.subTable(table) {
-				subTableDependency[subTableName] = tableName
+		tableRootMap := make(map[string]string, 0)
+		for rootTableName, rootTable := range x.tableMap {
+			for _, tableName := range x.flatTable(rootTable) {
+				tableRootMap[tableName] = rootTableName
 			}
 		}
 
 		for _, tableName := range tableNames {
 			// If it is not a wildcard character, it is a common table name
-			rootTableName, exists := subTableDependency[tableName]
+			rootTableName, exists := tableRootMap[tableName]
 			if !exists {
-				return nil, diagnostics.AddErrorMsg("pull provider %s's table failed, because table %s not exists or it is not root table", x.myProvider.Name, tableName)
+				diagnostics.AddErrorMsg("pull provider %s's table failed, because table %s not exists", x.myProvider.Name, tableName)
+				continue
 			}
 
 			// distinct
@@ -446,13 +447,13 @@ func (x *ProviderRuntime) computeAllNeedPullTablesCount(tables ...*schema.Table)
 	return count
 }
 
-func (x *ProviderRuntime) subTable(table *schema.Table) []string {
+func (x *ProviderRuntime) flatTable(table *schema.Table) []string {
 	if table == nil {
 		return nil
 	}
-	subTables := []string{table.TableName}
-	for _, subTable := range table.SubTables {
-		subTables = append(subTables, x.subTable(subTable)...)
+	tableNameSlice := []string{table.TableName}
+	for _, subTables := range table.SubTables {
+		tableNameSlice = append(tableNameSlice, x.flatTable(subTables)...)
 	}
-	return subTables
+	return tableNameSlice
 }
