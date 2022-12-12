@@ -93,3 +93,4 @@ fabric.properties
 #test/main.go
 
 **/*.log
+**/*.exe
