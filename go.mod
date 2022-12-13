@@ -15,7 +15,7 @@ require (
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/pulumi/pulumi-terraform-bridge/v3 v3.31.0
-	github.com/pulumi/pulumi/sdk/v3 v3.42.0
+	github.com/pulumi/pulumi/sdk/v3 v3.49.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/selefra/selefra-utils v0.0.2
 	github.com/songzhibin97/go-ognl v0.0.2
@@ -49,7 +49,6 @@ require (
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/hashicorp/terraform-json v0.14.0 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.13.0 // indirect
@@ -79,7 +78,6 @@ require (
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
-	github.com/zclconf/go-cty v1.12.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
