@@ -70,10 +70,10 @@ func (x *TerraformProviderDownloader) findExecutable(providerDownloadDirectory s
 }
 
 type TerraformProviderFile struct {
-	ProviderName    string
-	ProviderVersion string
-	DownloadUrl     string
-	Sha256Sum       string
-	Arch            string
-	OS              string
+	ProviderName    string `mapstructure:"provider-name"`
+	ProviderVersion string `mapstructure:"provider-version"`
+	DownloadUrl     string `mapstructure:"download-url"`
+	Sha256Sum       string `mapstructure:"sha256-sum"`
+	Arch            string `mapstructure:"arch"`
+	OS              string `mapstructure:"os"`
 }
