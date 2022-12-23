@@ -32,6 +32,8 @@ type Storage interface {
 	UseClientMeta
 
 	KeyValueExecutor
+
+	Lock
 }
 
 type UseClientMeta interface {
@@ -85,4 +87,9 @@ type KeyValueExecutor interface {
 	DeleteKey(ctx context.Context, key string) *schema.Diagnostics
 
 	ListKey(ctx context.Context) (*schema.Rows, *schema.Diagnostics)
+}
+
+type Lock interface {
+	Lock(ctx context.Context, lockId, ownerId string) error
+	UnLock(ctx context.Context, lockId, ownerId string) error
 }

@@ -39,6 +39,7 @@ func NewPostgresqlStorage(ctx context.Context, options *PostgresqlStorageOptions
 	postgresqlStorage := &PostgresqlStorage{
 		PostgresqlCRUDExecutor:        NewPostgresqlCRUDExecutor(pool),
 		PostgresqlTransactionExecutor: NewPostgresqlTransactionExecutor(pool),
+		pool:                          pool,
 	}
 	postgresqlStorage.PostgresqlTableAdmin = NewPostgresqlTableAdmin(postgresqlStorage.PostgresqlCRUDExecutor)
 	postgresqlStorage.PostgresqlNamespaceAdmin = NewPostgresqlNamespaceAdmin(postgresqlStorage.PostgresqlCRUDExecutor)

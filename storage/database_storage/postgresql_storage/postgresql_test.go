@@ -15,6 +15,7 @@ var testCrudExecutor *PostgresqlCRUDExecutor
 var testKeyValueExecutor *PostgresqlKeyValueExecutor
 var testTableAdmin *PostgresqlTableAdmin
 var testNamespaceAdmin *PostgresqlNamespaceAdmin
+var testPostgresqlStorage *PostgresqlStorage
 
 func TestMain(m *testing.M) {
 	diagnostics := schema.NewDiagnostics()
@@ -29,11 +30,11 @@ func TestMain(m *testing.M) {
 
 	dsn := env.GetDatabaseDsn()
 	fmt.Println("Test Use Database: " + dsn)
-	pool, diagnostics := connectToPostgresqlServer(context.Background(), &PostgresqlStorageOptions{
+	pool, d := connectToPostgresqlServer(context.Background(), &PostgresqlStorageOptions{
 		ConnectionString: dsn,
 		SearchPath:       "",
 	})
-	assert.True(nil, diagnostics == nil || !diagnostics.HasError())
+	assert.True(nil, d == nil || !d.HasError())
 
 	testCrudExecutor = NewPostgresqlCRUDExecutor(pool)
 	testCrudExecutor.SetClientMeta(&clientMeta)
@@ -42,6 +43,11 @@ func TestMain(m *testing.M) {
 
 	testTableAdmin = NewPostgresqlTableAdmin(testCrudExecutor)
 	testNamespaceAdmin = NewPostgresqlNamespaceAdmin(testCrudExecutor)
+
+	testPostgresqlStorage, d = NewPostgresqlStorage(context.Background(), NewPostgresqlStorageOptions(env.GetDatabaseDsn()))
+	if diagnostics.Add(d).HasError() {
+		panic(diagnostics.ToString())
+	}
 
 	code := m.Run()
 	os.Exit(code)
