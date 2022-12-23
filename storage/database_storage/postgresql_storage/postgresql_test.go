@@ -2,6 +2,7 @@ package postgresql_storage
 
 import (
 	"context"
+	"fmt"
 	"github.com/selefra/selefra-provider-sdk/env"
 	"github.com/selefra/selefra-provider-sdk/provider/schema"
 	"github.com/selefra/selefra-utils/pkg/reflect_util"
@@ -20,14 +21,16 @@ func TestMain(m *testing.M) {
 
 	workspace := "."
 	clientMeta := schema.ClientMeta{}
-	clientMetaRuntime, d := schema.NewClientMetaRuntime(context.Background(), workspace, "test", "v0.0.1",&clientMeta, nil, true)
+	clientMetaRuntime, d := schema.NewClientMetaRuntime(context.Background(), workspace, "test", "v0.0.1", &clientMeta, nil, true)
 	if diagnostics.Add(d).HasError() {
 		panic(diagnostics.ToString())
 	}
 	_ = reflect_util.SetStructPtrUnExportedStrField(&clientMeta, "runtime", clientMetaRuntime)
 
+	dsn := env.GetDatabaseDsn()
+	fmt.Println("Test Use Database: " + dsn)
 	pool, diagnostics := connectToPostgresqlServer(context.Background(), &PostgresqlStorageOptions{
-		ConnectionString: env.GetDatabaseDsn(),
+		ConnectionString: dsn,
 		SearchPath:       "",
 	})
 	assert.True(nil, diagnostics == nil || !diagnostics.HasError())
