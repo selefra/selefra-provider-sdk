@@ -43,6 +43,11 @@ func (x *PostgresqlKeyValueExecutor) GetValue(ctx context.Context, key string) (
 	if diagnostics.AddDiagnostics(d).HasError() {
 		return "", diagnostics
 	}
+	defer func() {
+		if query != nil {
+			query.Close()
+		}
+	}()
 	if !query.Next() {
 		return "", nil
 	}
@@ -67,5 +72,10 @@ func (x *PostgresqlKeyValueExecutor) ListKey(ctx context.Context) (*schema.Rows,
 	if diagnostics.AddDiagnostics(d).HasError() {
 		return nil, diagnostics
 	}
+	defer func() {
+		if queryResult != nil {
+			queryResult.Close()
+		}
+	}()
 	return queryResult.ReadRows(-1)
 }
