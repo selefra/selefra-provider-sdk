@@ -76,7 +76,7 @@ func (x *DataSourceExecutor) ShutdownAndAwaitTermination(ctx context.Context) *D
 
 func (x *DataSourceExecutor) runWorkers() {
 
-	semaphore := NewConsumerSemaphore()
+	semaphore := NewConsumerSemaphore(x.clientMeta)
 
 	for i := uint64(1); i <= x.workerNum; i++ {
 		x.wg.Add(1)
@@ -425,12 +425,15 @@ func (x *DataSourcePullTaskQueue) IsEmpty() bool {
 type ConsumerSemaphore struct {
 	lock                 sync.RWMutex
 	consumerIdleCountMap map[uint64]int
+
+	clientMeta *ClientMeta
 }
 
-func NewConsumerSemaphore() *ConsumerSemaphore {
+func NewConsumerSemaphore(clientMeta *ClientMeta) *ConsumerSemaphore {
 	return &ConsumerSemaphore{
 		lock:                 sync.RWMutex{},
 		consumerIdleCountMap: make(map[uint64]int),
+		clientMeta:           clientMeta,
 	}
 }
 
@@ -446,6 +449,17 @@ func (x *ConsumerSemaphore) Running(consumerId uint64) {
 	defer x.lock.Unlock()
 
 	x.consumerIdleCountMap[consumerId] = 0
+
+	// for log
+	if x.clientMeta != nil {
+		idleCount := 0
+		for _, count := range x.consumerIdleCountMap {
+			if count != 0 {
+				idleCount++
+			}
+		}
+		x.clientMeta.Debug("ConsumerSemaphore Running", zap.Int("total", len(x.consumerIdleCountMap)), zap.Int("idle", idleCount))
+	}
 }
 
 func (x *ConsumerSemaphore) Idle(consumerId uint64) {
@@ -459,6 +473,17 @@ func (x *ConsumerSemaphore) Idle(consumerId uint64) {
 		idleCount = 1
 	}
 	x.consumerIdleCountMap[consumerId] = idleCount
+
+	// for log
+	if x.clientMeta != nil {
+		idleCount := 0
+		for _, count := range x.consumerIdleCountMap {
+			if count != 0 {
+				idleCount++
+			}
+		}
+		x.clientMeta.Debug("ConsumerSemaphore Idle", zap.Int("total", len(x.consumerIdleCountMap)), zap.Int("idle", idleCount))
+	}
 }
 
 func (x *ConsumerSemaphore) IsAllConsumerDone() bool {
@@ -469,6 +494,10 @@ func (x *ConsumerSemaphore) IsAllConsumerDone() bool {
 		if idleCount < 3 {
 			return false
 		}
+	}
+
+	if x.clientMeta != nil {
+		x.clientMeta.Debug("ConsumerSemaphore IsAllConsumerDone return true")
 	}
 
 	return true
