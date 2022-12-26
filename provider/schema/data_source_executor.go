@@ -7,6 +7,7 @@ import (
 	"github.com/selefra/selefra-utils/pkg/id_util"
 	"github.com/selefra/selefra-utils/pkg/reflect_util"
 	"github.com/selefra/selefra-utils/pkg/runtime_util"
+	"go.uber.org/zap"
 	"strings"
 	"sync"
 	"time"
@@ -93,11 +94,20 @@ func (x *DataSourceExecutor) runWorkers() {
 
 					semaphore.Running(consumerId)
 
+					taskStartTime := time.Now()
+					if x.clientMeta != nil {
+						x.clientMeta.DebugF("begin exec task", zap.String("taskId", task.TaskId))
+					}
 					x.execTask(task)
 
 					// Callback method after task completion, if any
 					if task.TaskDoneCallback != nil {
 						task.TaskDoneCallback(task.Ctx, x.clientMeta, task)
+					}
+
+					execTaskCost := time.Now().Sub(taskStartTime)
+					if x.clientMeta != nil {
+						x.clientMeta.DebugF("exec task done", zap.String("taskId", task.TaskId), zap.String("cost", execTaskCost.String()))
 					}
 
 				} else {

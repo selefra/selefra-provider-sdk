@@ -8,6 +8,7 @@ import (
 	"github.com/selefra/selefra-provider-sdk/provider/schema"
 	"github.com/selefra/selefra-provider-sdk/storage"
 	"go.uber.org/zap"
+	"time"
 )
 
 type PostgresqlCRUDExecutor struct {
@@ -31,11 +32,16 @@ func NewPostgresqlCRUDExecutor(pool *pgxpool.Pool) *PostgresqlCRUDExecutor {
 func (x *PostgresqlCRUDExecutor) Query(ctx context.Context, query string, args ...any) (storage.QueryResult, *schema.Diagnostics) {
 
 	diagnostics := schema.NewDiagnostics()
+
+	startTime := time.Now()
 	rows, err := x.pool.Query(ctx, query, args...)
+	cost := time.Now().Sub(startTime)
 
 	if err != nil {
+		x.clientMeta.Error("Postgresql sql query query error", zap.String("sql", query), zap.String("cost", cost.String()), zap.Error(err))
 		return nil, diagnostics.AddErrorMsg("Postgresql sql query %s exec error: %s", query, err.Error())
 	}
+	x.clientMeta.Debug("Postgresql sql query query success", zap.String("sql", query), zap.String("cost", cost.String()))
 
 	return &PostgresqlQueryResult{
 		rows: rows,
@@ -44,17 +50,16 @@ func (x *PostgresqlCRUDExecutor) Query(ctx context.Context, query string, args .
 
 func (x *PostgresqlCRUDExecutor) Exec(ctx context.Context, query string, args ...any) *schema.Diagnostics {
 	diagnostics := schema.NewDiagnostics()
+
+	startTime := time.Now()
 	_, err := x.pool.Exec(ctx, query, args...)
+	cost := time.Now().Sub(startTime)
+
 	if err != nil {
-
-		x.clientMeta.Error("Postgresql sql exec error", zap.String("sql", query), zap.Any("args", args))
-
+		x.clientMeta.Error("Postgresql sql exec error", zap.String("sql", query), zap.String("cost", cost.String()), zap.Error(err))
 		diagnostics.AddErrorMsg("Postgresql sql %s exec error: %s", err.Error(), query)
-	} else {
-
-		x.clientMeta.Debug("Postgresql sql exec", zap.String("sql", query), zap.Any("args", args))
-
 	}
+	x.clientMeta.Debug("Postgresql sql exec error", zap.String("sql", query), zap.String("cost", cost.String()))
 	return diagnostics
 }
 
@@ -81,6 +86,7 @@ func (x *PostgresqlCRUDExecutor) Insert(ctx context.Context, table *schema.Table
 		return diagnostics.AddErrorMsg("table %s insert build sql error: %s", table.TableName, err.Error())
 	}
 
+	startTime := time.Now()
 	err = x.pool.BeginTxFunc(ctx, pgx.TxOptions{
 		IsoLevel:       pgx.ReadCommitted,
 		AccessMode:     pgx.ReadWrite,
@@ -89,17 +95,12 @@ func (x *PostgresqlCRUDExecutor) Insert(ctx context.Context, table *schema.Table
 		_, err := tx.Exec(ctx, s, args...)
 		return err
 	})
+	cost := time.Now().Sub(startTime)
 	if err != nil {
-
-		// print data when occur error
-		x.clientMeta.Error("postgresql_storage insert error", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.Error(err))
-
+		x.clientMeta.Error("postgresql_storage insert error", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()), zap.Error(err))
 		diagnostics.AddErrorMsg("table %s insert transaction error: %s", table.TableName, err.Error())
-	} else {
-
-		x.clientMeta.Debug("postgresql_storage insert", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.Error(err))
-
 	}
+	x.clientMeta.Debug("postgresql_storage insert success", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()))
 
 	return diagnostics
 }
