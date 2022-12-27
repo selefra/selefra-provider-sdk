@@ -38,10 +38,14 @@ func (x *PostgresqlCRUDExecutor) Query(ctx context.Context, query string, args .
 	cost := time.Now().Sub(startTime)
 
 	if err != nil {
-		x.clientMeta.Error("Postgresql sql query query error", zap.String("sql", query), zap.String("cost", cost.String()), zap.Error(err))
+		if x.clientMeta != nil {
+			x.clientMeta.Error("Postgresql sql query query error", zap.String("sql", query), zap.String("cost", cost.String()), zap.Error(err))
+		}
 		return nil, diagnostics.AddErrorMsg("Postgresql sql query %s exec error: %s", query, err.Error())
 	}
-	x.clientMeta.Debug("Postgresql sql query query success", zap.String("sql", query), zap.String("cost", cost.String()))
+	if x.clientMeta != nil {
+		x.clientMeta.Debug("Postgresql sql query query success", zap.String("sql", query), zap.String("cost", cost.String()))
+	}
 
 	return &PostgresqlQueryResult{
 		rows: rows,
@@ -56,10 +60,14 @@ func (x *PostgresqlCRUDExecutor) Exec(ctx context.Context, query string, args ..
 	cost := time.Now().Sub(startTime)
 
 	if err != nil {
-		x.clientMeta.Error("Postgresql sql exec error", zap.String("sql", query), zap.String("cost", cost.String()), zap.Error(err))
+		if x.clientMeta != nil {
+			x.clientMeta.Error("Postgresql sql exec error", zap.String("sql", query), zap.String("cost", cost.String()), zap.Error(err))
+		}
 		diagnostics.AddErrorMsg("Postgresql sql %s exec error: %s", err.Error(), query)
 	}
-	x.clientMeta.Debug("Postgresql sql exec error", zap.String("sql", query), zap.String("cost", cost.String()))
+	if x.clientMeta != nil {
+		x.clientMeta.Debug("Postgresql sql exec error", zap.String("sql", query), zap.String("cost", cost.String()))
+	}
 	return diagnostics
 }
 
@@ -97,10 +105,14 @@ func (x *PostgresqlCRUDExecutor) Insert(ctx context.Context, table *schema.Table
 	})
 	cost := time.Now().Sub(startTime)
 	if err != nil {
-		x.clientMeta.Error("postgresql_storage insert error", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()), zap.Error(err))
+		if x.clientMeta != nil {
+			x.clientMeta.Error("postgresql_storage insert error", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()), zap.Error(err))
+		}
 		diagnostics.AddErrorMsg("table %s insert transaction error: %s", table.TableName, err.Error())
 	}
-	x.clientMeta.Debug("postgresql_storage insert success", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()))
+	if x.clientMeta != nil {
+		x.clientMeta.Debug("postgresql_storage insert success", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()))
+	}
 
 	return diagnostics
 }

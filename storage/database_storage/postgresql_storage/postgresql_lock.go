@@ -54,7 +54,13 @@ func (x *LockInformation) ToJsonString() string {
 
 // ------------------------------------------------- --------------------------------------------------------------------
 
+const defaultCasRetryTimes = 3
+
 func (x *PostgresqlStorage) Lock(ctx context.Context, lockId, ownerId string) error {
+	return x.lockWithRetry(ctx, lockId, ownerId, defaultCasRetryTimes)
+}
+
+func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId string, leftTryTimes int) error {
 	lockKey := buildLockKey(lockId)
 
 	// Determine whether the lock already exists
@@ -64,18 +70,22 @@ func (x *PostgresqlStorage) Lock(ctx context.Context, lockId, ownerId string) er
 		if information.OwnerId == ownerId {
 			// Is reentrant to acquire the lock, increase the number of locks by 1
 			information.LockCount++
-			information.ExceptedExpireTime = time.Now().Add(time.Minute * 10)
+			information.ExceptedExpireTime = x.nextExceptedExpireTime()
 			// compare and set
 			updateSql := `UPDATE selefra_meta_kv SET value = $1 WHERE key = $2 AND value = $3 `
 			rs, err := x.pool.Exec(ctx, updateSql, information.ToJsonString(), lockKey, oldJsonString)
 			if err != nil {
 				return err
 			}
-			if rs.RowsAffected() == 0 {
-				return ErrLockFailed
-			} else {
+			// update success
+			if rs.RowsAffected() != 0 {
 				return nil
 			}
+			// need retry
+			if leftTryTimes > 0 {
+				return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
+			}
+			return ErrLockFailed
 		} else {
 			// If a lock exists but is not held by itself, check to see if it is an expired lock
 			if information.ExceptedExpireTime.After(time.Now()) {
@@ -84,12 +94,18 @@ func (x *PostgresqlStorage) Lock(ctx context.Context, lockId, ownerId string) er
 			}
 			// If the lock has expired, delete it and try to reacquire it
 			dropExpiredLockSql := `DELETE FROM selefra_meta_kv WHERE key = $1 AND value = $2`
-			_, err := x.pool.Exec(ctx, dropExpiredLockSql, lockKey, oldJsonString)
+			rs, err := x.pool.Exec(ctx, dropExpiredLockSql, lockKey, oldJsonString)
 			if err != nil {
 				return err
 			}
-			// TODO
-			return x.Lock(ctx, lockId, ownerId)
+			// update failed, lock get failed
+			if rs.RowsAffected() == 0 {
+				return ErrLockFailed
+			}
+			if leftTryTimes > 0 {
+				return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
+			}
+			return ErrLockFailed
 		}
 	}
 
@@ -98,7 +114,7 @@ func (x *PostgresqlStorage) Lock(ctx context.Context, lockId, ownerId string) er
 		OwnerId:   ownerId,
 		LockCount: 1,
 		// By default, a lock is expected to hold for at least ten minutes
-		ExceptedExpireTime: time.Now().Add(time.Minute * 10),
+		ExceptedExpireTime: x.nextExceptedExpireTime(),
 	}
 	sql := `INSERT INTO selefra_meta_kv (
                              "key",
@@ -152,6 +168,11 @@ func (x *PostgresqlStorage) refreshLockExpiredTime(ctx context.Context, lockId, 
 
 // UnLock Release the lock, if it belongs to you
 func (x *PostgresqlStorage) UnLock(ctx context.Context, lockId, ownerId string) error {
+	return x.unlockWithRetry(ctx, lockId, ownerId, defaultCasRetryTimes)
+}
+
+// unlock operation may be failed by refresh goroutine, so need some retry
+func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId string, tryTimes int) error {
 	lockKey := buildLockKey(lockId)
 
 	lockInformation, err := x.readLockInformation(ctx, lockKey)
@@ -168,18 +189,23 @@ func (x *PostgresqlStorage) UnLock(ctx context.Context, lockId, ownerId string) 
 	if lockInformation.LockCount > 0 {
 		// It is not released completely, but the count is reduced by 1 and updated back to the database
 		// Is reentrant to acquire the lock, increase the number of locks by 1
-		lockInformation.ExceptedExpireTime = time.Now().Add(time.Minute * 10)
+		lockInformation.ExceptedExpireTime = x.nextExceptedExpireTime()
 		// compare and set
 		updateSql := `UPDATE selefra_meta_kv SET value = $1 WHERE key = $2 AND value = $3 `
 		rs, err := x.pool.Exec(ctx, updateSql, lockInformation.ToJsonString(), lockKey, oldJsonString)
 		if err != nil {
 			return err
 		}
-		if rs.RowsAffected() == 0 {
-			return ErrUnlockFailed
-		} else {
+		// update success
+		if rs.RowsAffected() != 0 {
 			return nil
 		}
+		// update failed, need retry
+		if tryTimes > 0 {
+			return x.unlockWithRetry(ctx, lockId, ownerId, tryTimes-1)
+		}
+		// try times used up, finally failed
+		return ErrUnlockFailed
 	}
 
 	// Once lock count is free, it needs to be completely free, which in this case means delete
@@ -188,8 +214,16 @@ func (x *PostgresqlStorage) UnLock(ctx context.Context, lockId, ownerId string) 
 	if err != nil {
 		return err
 	}
+	// delete failed
 	if exec.RowsAffected() == 0 {
-		return ErrUnlockFailed
+		// need retry
+		if tryTimes > 0 {
+			if err := x.unlockWithRetry(ctx, lockId, ownerId, tryTimes-1); err != nil {
+				return err
+			}
+		} else {
+			return ErrUnlockFailed
+		}
 	}
 
 	// stop refresh goroutine
@@ -203,6 +237,10 @@ func (x *PostgresqlStorage) UnLock(ctx context.Context, lockId, ownerId string) 
 	return nil
 }
 
+func (x *PostgresqlStorage) nextExceptedExpireTime() time.Time {
+	return time.Now().Add(time.Minute * 10)
+}
+
 // read lock information from db
 func (x *PostgresqlStorage) readLockInformation(ctx context.Context, lockKey string) (*LockInformation, error) {
 	lockInformationJsonString, diagnostics := x.GetValue(ctx, lockKey)
@@ -211,14 +249,6 @@ func (x *PostgresqlStorage) readLockInformation(ctx context.Context, lockKey str
 	}
 	return FromJsonString(lockInformationJsonString)
 }
-
-//func convertDiagnosticsToError(d *schema.Diagnostics) error {
-//	if d != nil && d.HasError() {
-//		return fmt.Errorf("unlock failed: %s", d.ToString())
-//	} else {
-//		return nil
-//	}
-//}
 
 func buildLockKey(lockId string) string {
 	return "storage_lock_id_" + lockId
