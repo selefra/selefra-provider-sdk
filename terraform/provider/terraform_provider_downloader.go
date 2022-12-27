@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"github.com/hashicorp/go-getter"
 	"io/fs"
 	"os"
@@ -41,17 +42,22 @@ func (x *TerraformProviderDownloader) Download(targetDirectory string) (string, 
 		}
 	}
 
-	err = getter.Get(providerDownloadDirectory, choosedFile.DownloadUrl)
-	if err != nil {
-		return "", err
-	}
+	var downloadError error
+	for i := 0; i < 10; i++ {
+		downloadError = getter.Get(providerDownloadDirectory, choosedFile.DownloadUrl)
+		if downloadError != nil {
+			continue
+		}
 
-	executable, err := x.findExecutable(providerDownloadDirectory)
-	if err != nil {
-		return "", err
-	}
+		executable, err := x.findExecutable(providerDownloadDirectory)
+		if err != nil {
+			downloadError = err
+			continue
+		}
 
-	return executable, nil
+		return executable, nil
+	}
+	return "", fmt.Errorf("download failed: %s", downloadError.Error())
 }
 
 func (x *TerraformProviderDownloader) findExecutable(providerDownloadDirectory string) (string, error) {
