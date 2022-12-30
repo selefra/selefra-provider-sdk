@@ -174,6 +174,10 @@ func (x *Diagnostics) HasError() bool {
 	return x.hasError
 }
 
+func (x *Diagnostics) String() string {
+	return x.ToString()
+}
+
 func (x *Diagnostics) ToString() string {
 	builder := string_util.NewStringBuilder()
 	for index, diagnostic := range x.diagnostics {
