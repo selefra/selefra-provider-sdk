@@ -450,16 +450,16 @@ func (x *ConsumerSemaphore) Running(consumerId uint64) {
 
 	x.consumerIdleCountMap[consumerId] = 0
 
-	// for log
-	if x.clientMeta != nil {
-		idleCount := 0
-		for _, count := range x.consumerIdleCountMap {
-			if count != 0 {
-				idleCount++
-			}
-		}
-		x.clientMeta.Debug("ConsumerSemaphore Running", zap.Int("total", len(x.consumerIdleCountMap)), zap.Int("idle", idleCount))
-	}
+	//// for log
+	//if x.clientMeta != nil {
+	//	idleCount := 0
+	//	for _, count := range x.consumerIdleCountMap {
+	//		if count != 0 {
+	//			idleCount++
+	//		}
+	//	}
+	//	x.clientMeta.Debug("ConsumerSemaphore Running", zap.Int("total", len(x.consumerIdleCountMap)), zap.Int("idle", idleCount))
+	//}
 }
 
 func (x *ConsumerSemaphore) Idle(consumerId uint64) {
@@ -474,16 +474,16 @@ func (x *ConsumerSemaphore) Idle(consumerId uint64) {
 	}
 	x.consumerIdleCountMap[consumerId] = idleCount
 
-	// for log
-	if x.clientMeta != nil {
-		idleCount := 0
-		for _, count := range x.consumerIdleCountMap {
-			if count != 0 {
-				idleCount++
-			}
-		}
-		x.clientMeta.Debug("ConsumerSemaphore Idle", zap.Int("total", len(x.consumerIdleCountMap)), zap.Int("idle", idleCount))
-	}
+	//// for log
+	//if x.clientMeta != nil {
+	//	idleCount := 0
+	//	for _, count := range x.consumerIdleCountMap {
+	//		if count != 0 {
+	//			idleCount++
+	//		}
+	//	}
+	//	x.clientMeta.Debug("ConsumerSemaphore Idle", zap.Int("total", len(x.consumerIdleCountMap)), zap.Int("idle", idleCount))
+	//}
 }
 
 func (x *ConsumerSemaphore) IsAllConsumerDone() bool {
