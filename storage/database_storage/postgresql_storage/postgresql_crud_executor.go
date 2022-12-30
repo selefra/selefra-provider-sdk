@@ -66,7 +66,7 @@ func (x *PostgresqlCRUDExecutor) Exec(ctx context.Context, query string, args ..
 		diagnostics.AddErrorMsg("Postgresql sql %s exec error: %s", err.Error(), query)
 	}
 	if x.clientMeta != nil {
-		x.clientMeta.Debug("Postgresql sql exec error", zap.String("sql", query), zap.String("cost", cost.String()))
+		x.clientMeta.Debug("Postgresql sql exec success", zap.String("sql", query), zap.String("cost", cost.String()))
 	}
 	return diagnostics
 }
@@ -76,6 +76,9 @@ func (x *PostgresqlCRUDExecutor) Insert(ctx context.Context, table *schema.Table
 	diagnostics := schema.NewDiagnostics()
 
 	if rows.IsEmpty() {
+		if x.clientMeta != nil {
+			x.clientMeta.Error("postgresql_storage insert error 001, because want insert empty row", zap.String("table", table.TableName))
+		}
 		return diagnostics.AddErrorMsg("table %s insert error: rows is empty", table.TableName)
 	}
 
@@ -91,6 +94,9 @@ func (x *PostgresqlCRUDExecutor) Insert(ctx context.Context, table *schema.Table
 	}
 	s, args, err := sqlStmt.ToSql()
 	if err != nil {
+		if x.clientMeta != nil {
+			x.clientMeta.Error("postgresql_storage insert error 002", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.Error(err))
+		}
 		return diagnostics.AddErrorMsg("table %s insert build sql error: %s", table.TableName, err.Error())
 	}
 
@@ -106,12 +112,13 @@ func (x *PostgresqlCRUDExecutor) Insert(ctx context.Context, table *schema.Table
 	cost := time.Now().Sub(startTime)
 	if err != nil {
 		if x.clientMeta != nil {
-			x.clientMeta.Error("postgresql_storage insert error", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()), zap.Error(err))
+			x.clientMeta.Error("postgresql_storage insert error 003", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()), zap.Error(err))
 		}
 		diagnostics.AddErrorMsg("table %s insert transaction error: %s", table.TableName, err.Error())
-	}
-	if x.clientMeta != nil {
-		x.clientMeta.Debug("postgresql_storage insert success", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()))
+	} else {
+		if x.clientMeta != nil {
+			x.clientMeta.Debug("postgresql_storage insert success", zap.String("table", table.TableName), zap.String("rows", rows.String()), zap.String("cost", cost.String()))
+		}
 	}
 
 	return diagnostics
