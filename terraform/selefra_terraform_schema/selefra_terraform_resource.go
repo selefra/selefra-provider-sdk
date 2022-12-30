@@ -10,7 +10,7 @@ import (
 // ------------------------------------------------- TerraformBridgeGetter ---------------------------------------------
 
 // TerraformBridgeGetter This interface call returns an rpc bridge to the provider created and initialized with the terraform
-type TerraformBridgeGetter func() *bridge.TerraformBridge
+type TerraformBridgeGetter func(ctx context.Context, clientMeta *schema.ClientMeta, taskClient any, task *schema.DataSourcePullTask) *bridge.TerraformBridge
 
 // ------------------------------------------------- ListIdsFunc -------------------------------------------------------
 
@@ -31,7 +31,7 @@ func (x ListIdsFunc) ToSelefraDataSource(getter TerraformBridgeGetter, resourceN
 				return nil
 			}
 			clientMeta.DebugF("exec table list return no zero ids", zap.String("taskId", task.TaskId), zap.String("tableName", task.Table.TableName), zap.Strings("ids", ids))
-			return getter().ListByIds(ctx, resourceName, ids, clientMeta, taskClient, task, resultChannel)
+			return getter(ctx, clientMeta, taskClient, task).ListByIds(ctx, resourceName, ids, clientMeta, taskClient, task, resultChannel)
 		},
 	}
 }
