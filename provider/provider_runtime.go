@@ -237,6 +237,7 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 		// taskId --> tableName relation, after just use taskId
 		x.myProvider.ClientMeta.DebugF("taskId = %s, commit task to executor, table name = %s", task.TaskId, task.Table.TableName)
 	}
+	x.myProvider.ClientMeta.DebugF("all task submit to executor done, shutdown and wait...")
 
 	diagnostics.AddDiagnostics(dataSourceExecutor.ShutdownAndAwaitTermination(context.Background()))
 	diagnosticsChannel <- diagnostics
