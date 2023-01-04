@@ -55,7 +55,7 @@ func (x *ProviderDocumentGenerator) genProviderInfo(sb *string_builder.StringBui
 
 	sb.AppendString("# Install \n\n").
 		AppendString("```\n").
-		AppendString("selefra  provider install ").AppendString(provider.Name).AppendString("\n").
+		AppendString("selefra provider install ").AppendString(provider.Name).AppendString("\n").
 		AppendString("```\n")
 
 	sb.AppendString("\n\n")
