@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/selefra/selefra-utils/pkg/reflect_util"
 	"go.uber.org/zap"
 	"reflect"
 	"sync"
@@ -280,16 +281,30 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 	for _, result := range resultSlice {
 
 		// step 1. parser from raw result to row
-		row, d := x.handleSingleResult(ctx, clientMeta, client, task, result)
+		row, d := x.transformSingleResult(ctx, clientMeta, client, task, result)
 		diagnostics.Add(d)
 		if d != nil && d.HasError() {
 			// If an error occurs and ignore is configured, the end occurs
 			if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
 				clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult")
-				continue
 			} else {
 				return nil, nil, diagnostics
 			}
+		}
+
+		// check is need save, if any column have value, try save it
+		if row == nil {
+			continue
+		}
+		haveAnyColumnValue := false
+		for _, value := range row.GetValues() {
+			if !reflect_util.IsNil(value) {
+				haveAnyColumnValue = true
+				break
+			}
+		}
+		if !haveAnyColumnValue {
+			continue
 		}
 
 		// step 2. save row to database
@@ -338,7 +353,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 	return saveSuccessRows, saveSuccessResultSlice, diagnostics
 }
 
-func (x *ProviderRuntime) handleSingleResult(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Row, *schema.Diagnostics) {
+func (x *ProviderRuntime) transformSingleResult(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, result any) (*schema.Row, *schema.Diagnostics) {
 	diagnostics := schema.NewDiagnostics()
 
 	// Analytical results
