@@ -383,7 +383,7 @@ func (x *ProviderRuntime) transformSingleResult(ctx context.Context, clientMeta 
 
 	// If an error occurs and ignore is configured, the end occurs
 	if diagnostics.AddDiagnostics(d).HasError() {
-		return nil, diagnostics
+		return row, diagnostics
 	}
 
 	return row, diagnostics
