@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/go-getter v1.6.2
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/hashicorp/go-plugin v1.4.6
+	github.com/hashicorp/go-plugin v1.4.8
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/pulumi/pulumi-terraform-bridge/v3 v3.31.0
