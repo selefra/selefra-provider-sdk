@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"github.com/selefra/selefra-provider-sdk/provider/transformer/column_value_convertor"
-
 	"github.com/selefra/selefra-utils/pkg/reflect_util"
 
 	"github.com/selefra/selefra-provider-sdk/grpc/shard"
@@ -47,7 +46,18 @@ const (
 )
 
 // GetProviderInformation Obtain the information about the Provider, must after Init
-func (x *Provider) GetProviderInformation(ctx context.Context, in *shard.GetProviderInformationRequest) (*shard.GetProviderInformationResponse, error) {
+func (x *Provider) GetProviderInformation(ctx context.Context, in *shard.GetProviderInformationRequest) (response *shard.GetProviderInformationResponse, err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			response = &shard.GetProviderInformationResponse{
+				Name:        x.Name,
+				Version:     x.Version,
+				Tables:      nil,
+				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec provider GetProviderInformation panic: %s", r),
+			}
+		}
+	}()
 
 	// runtime must already init
 	if x.runtime == nil {
@@ -70,7 +80,17 @@ func (x *Provider) GetProviderInformation(ctx context.Context, in *shard.GetProv
 }
 
 // GetProviderConfig Obtain the configuration information of the Provider, must after Init
-func (x *Provider) GetProviderConfig(ctx context.Context, in *shard.GetProviderConfigRequest) (*shard.GetProviderConfigResponse, error) {
+func (x *Provider) GetProviderConfig(ctx context.Context, in *shard.GetProviderConfigRequest) (response *shard.GetProviderConfigResponse, err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			response = &shard.GetProviderConfigResponse{
+				Name:        x.Name,
+				Version:     x.Version,
+				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec provider GetProviderConfig panic: %s", r),
+			}
+		}
+	}()
 
 	// runtime must already init
 	if x.runtime == nil {
@@ -87,7 +107,15 @@ func (x *Provider) GetProviderConfig(ctx context.Context, in *shard.GetProviderC
 }
 
 // SetProviderConfig Set the configuration information of the Provider, must after Init
-func (x *Provider) SetProviderConfig(ctx context.Context, request *shard.SetProviderConfigRequest) (*shard.SetProviderConfigResponse, error) {
+func (x *Provider) SetProviderConfig(ctx context.Context, request *shard.SetProviderConfigRequest) (response *shard.SetProviderConfigResponse, err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			response = &shard.SetProviderConfigResponse{
+				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec provider SetProviderConfig panic: %s", r),
+			}
+		}
+	}()
 
 	diagnostics := schema.NewDiagnostics()
 
@@ -132,7 +160,15 @@ func (x *Provider) SetProviderConfig(ctx context.Context, request *shard.SetProv
 // -------------------------------------------------------------------------------------------------------------------------
 
 // PullTables Pull the given resource
-func (x *Provider) PullTables(ctx context.Context, request *shard.PullTablesRequest, sender shard.ProviderServerSender) error {
+func (x *Provider) PullTables(ctx context.Context, request *shard.PullTablesRequest, sender shard.ProviderServerSender) (err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = sender.Send(&shard.PullTablesResponse{
+				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec PullTables panic: %s", r),
+			})
+		}
+	}()
 
 	// runtime must already init
 	if x.runtime == nil {
@@ -146,17 +182,43 @@ func (x *Provider) PullTables(ctx context.Context, request *shard.PullTablesRequ
 
 // ------------------------------------------------- ------------------------------------------------------------------------
 
-func (x *Provider) DropTableAll(ctx context.Context, request *shard.ProviderDropTableAllRequest) (*shard.ProviderDropTableAllResponse, error) {
+func (x *Provider) DropTableAll(ctx context.Context, request *shard.ProviderDropTableAllRequest) (response *shard.ProviderDropTableAllResponse, err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			response = &shard.ProviderDropTableAllResponse{
+				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec provider DropTableAll panic: %s", r),
+			}
+		}
+	}()
+
 	return &shard.ProviderDropTableAllResponse{Diagnostics: x.runtime.DropAllTables(ctx)}, nil
 }
 
-func (x *Provider) CreateAllTables(ctx context.Context, request *shard.ProviderCreateAllTablesRequest) (*shard.ProviderCreateAllTablesResponse, error) {
+func (x *Provider) CreateAllTables(ctx context.Context, request *shard.ProviderCreateAllTablesRequest) (response *shard.ProviderCreateAllTablesResponse, err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			response = &shard.ProviderCreateAllTablesResponse{
+				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec provider CreateAllTables panic: %s", r),
+			}
+		}
+	}()
+
 	return &shard.ProviderCreateAllTablesResponse{Diagnostics: x.runtime.CreateAllTables(ctx)}, nil
 }
 
 // ------------------------------------------------- ------------------------------------------------------------------------
 
-func (x *Provider) Init(ctx context.Context, request *shard.ProviderInitRequest) (*shard.ProviderInitResponse, error) {
+func (x *Provider) Init(ctx context.Context, request *shard.ProviderInitRequest) (response *shard.ProviderInitResponse, err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			response = &shard.ProviderInitResponse{
+				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec provider Init panic: %s", r),
+			}
+		}
+	}()
 
 	diagnostics := schema.NewDiagnostics()
 
