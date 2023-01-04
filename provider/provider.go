@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/selefra/selefra-provider-sdk/provider/transformer/column_value_convertor"
 	"github.com/selefra/selefra-utils/pkg/reflect_util"
+	"go.uber.org/zap"
 
 	"github.com/selefra/selefra-provider-sdk/grpc/shard"
 	"github.com/selefra/selefra-provider-sdk/provider/schema"
@@ -164,6 +165,7 @@ func (x *Provider) PullTables(ctx context.Context, request *shard.PullTablesRequ
 
 	defer func() {
 		if r := recover(); r != nil {
+			x.ClientMeta.ErrorF("exec PullTables panic", zap.Error(r.(error)))
 			err = sender.Send(&shard.PullTablesResponse{
 				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec PullTables panic: %s", r),
 			})

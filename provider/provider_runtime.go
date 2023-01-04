@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"reflect"
 	"sync"
 
@@ -187,13 +188,16 @@ func (x *ProviderRuntime) PullTables(ctx context.Context, request *shard.PullTab
 				continue
 			}
 			finishTableLock.RLock()
-			_ = sender.Send(&shard.PullTablesResponse{
+			err := sender.Send(&shard.PullTablesResponse{
 				FinishedTables: finishTable,
 				TableCount:     totalTableCount,
 				Table:          "",
 				Diagnostics:    diagnostics,
 			})
 			finishTableLock.RUnlock()
+			if err != nil {
+				x.myProvider.ClientMeta.ErrorF("send rpc message error", zap.Error(err))
+			}
 		}
 	}()
 
