@@ -9,7 +9,7 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-cty v1.4.1-0.20200414143053-d3edf31b6320
 	github.com/hashicorp/go-getter v1.6.2
-	github.com/hashicorp/go-hclog v1.3.1
+	github.com/hashicorp/go-hclog v1.4.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.4.6
 	github.com/jackc/pgx/v4 v4.17.2
