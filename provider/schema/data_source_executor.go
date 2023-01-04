@@ -17,6 +17,7 @@ import (
 
 // DataSourceExecutor Pulls the actuator of the data source
 type DataSourceExecutor struct {
+	executorId string
 
 	// The pull data task waiting to be executed
 	taskQueue *DataSourcePullTaskQueue
@@ -47,6 +48,7 @@ func NewDataSourcePullExecutor(workerNum uint64, clientMeta *ClientMeta, errorsH
 	}
 
 	executor := &DataSourceExecutor{
+		executorId:        id_util.RandomId(),
 		clientMeta:        clientMeta,
 		errorsHandlerMeta: errorsHandlerMeta,
 		workerNum:         workerNum,
@@ -62,6 +64,7 @@ func NewDataSourcePullExecutor(workerNum uint64, clientMeta *ClientMeta, errorsH
 
 // Submit Submit a data source pull task for execution
 func (x *DataSourceExecutor) Submit(ctx context.Context, task *DataSourcePullTask) *Diagnostics {
+	x.clientMeta.DebugF("executor submit task", zap.String("executorId", x.executorId), zap.String("taskId", task.TaskId))
 	x.taskQueue.Add(task)
 	return nil
 }
@@ -69,12 +72,15 @@ func (x *DataSourceExecutor) Submit(ctx context.Context, task *DataSourcePullTas
 // ShutdownAndAwaitTermination Close the task queue and hold the current coroutine until the task completes or times out
 func (x *DataSourceExecutor) ShutdownAndAwaitTermination(ctx context.Context) *Diagnostics {
 
+	x.clientMeta.DebugF("executor shutdown and await termination", zap.String("executorId", x.executorId))
 	x.wg.Wait()
 
 	return nil
 }
 
 func (x *DataSourceExecutor) runWorkers() {
+
+	x.clientMeta.DebugF("executor begin run worker", zap.String("executorId", x.executorId), zap.Uint64("workerNum", x.workerNum))
 
 	semaphore := NewConsumerSemaphore(x.clientMeta)
 
@@ -86,7 +92,10 @@ func (x *DataSourceExecutor) runWorkers() {
 
 		go func() {
 
-			defer x.wg.Done()
+			defer func() {
+				x.wg.Done()
+				x.clientMeta.DebugF("executor consumer exit", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId))
+			}()
 
 			for !semaphore.IsAllConsumerDone() {
 
@@ -95,29 +104,44 @@ func (x *DataSourceExecutor) runWorkers() {
 					semaphore.Running(consumerId)
 
 					taskStartTime := time.Now()
-					if x.clientMeta != nil {
-						x.clientMeta.DebugF("begin exec task", zap.String("taskId", task.TaskId))
-					}
-					x.execTask(task)
+					x.clientMeta.DebugF("executor begin exec task", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId), zap.String("taskId", task.TaskId))
 
-					// Callback method after task completion, if any
-					if task.TaskDoneCallback != nil {
-						task.TaskDoneCallback(task.Ctx, x.clientMeta, task)
-					}
+					diagnostics := x.execTaskWithRecovery(consumerId, task)
 
 					execTaskCost := time.Now().Sub(taskStartTime)
-					if x.clientMeta != nil {
-						x.clientMeta.DebugF("exec task done", zap.String("taskId", task.TaskId), zap.String("cost", execTaskCost.String()))
-					}
+					x.clientMeta.DebugF("executor exec task done", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId), zap.String("taskId", task.TaskId), zap.String("cost", execTaskCost.String()))
+
+					task.DiagnosticsChannel <- diagnostics
 
 				} else {
 					semaphore.Idle(consumerId)
-					time.Sleep(time.Second * 1)
+					time.Sleep(time.Second * 3)
 				}
 			}
 
 		}()
 	}
+}
+
+func (x *DataSourceExecutor) execTaskWithRecovery(consumerId uint64, task *DataSourcePullTask) (diagnostics *Diagnostics) {
+
+	diagnostics = NewDiagnostics()
+
+	defer func() {
+		if r := recover(); r != nil {
+			x.clientMeta.Error("exec task panic", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId), zap.Any("task", task), zap.Error(r.(error)))
+			diagnostics.AddErrorMsg("exec task panic, table = %s, msg = %s", task.Table.TableName, r)
+		}
+	}()
+
+	x.execTask(task)
+
+	// Callback method after task completion, if any
+	if task.TaskDoneCallback != nil {
+		diagnostics.AddDiagnostics(task.TaskDoneCallback(task.Ctx, x.clientMeta, task))
+	}
+
+	return diagnostics
 }
 
 // Tasks may generate new tasks, which are executed recursively
