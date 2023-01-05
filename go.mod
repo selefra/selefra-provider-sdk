@@ -15,7 +15,7 @@ require (
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/pulumi/pulumi-terraform-bridge/v3 v3.31.0
-	github.com/pulumi/pulumi/sdk/v3 v3.42.0
+	github.com/pulumi/pulumi/sdk/v3 v3.51.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/selefra/selefra-utils v0.0.2
 	github.com/songzhibin97/go-ognl v0.0.2
