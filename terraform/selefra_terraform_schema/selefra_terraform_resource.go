@@ -50,6 +50,13 @@ type SelefraTerraformResource struct {
 	// You can provide some description information, which will be included in the automatic document generation
 	Description string
 
+	// If your table needs to extend the default call method, you can implement this function
+	// The default is to use Task once per client
+	// But you can call the client multiple times by making multiple copies of the client
+	// When a value is returned, it is called once with each of the returned clients
+	// The second parameter, task, if it is not returned, uses the original task. If it is returned, it must be the same length as the client and correspond one to one
+	ExpandClientTask func(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask) []*schema.ClientTaskContext
+
 	// A table can have child tables whose data depends on the current table
 	//SubTables []*schema.Table
 	SubTables []string
@@ -66,8 +73,9 @@ func (x *SelefraTerraformResource) ToTable(getter TerraformBridgeGetter) (*schem
 	}
 
 	return &schema.Table{
-		TableName:   x.SelefraTableName,
-		Description: x.Description,
-		DataSource:  x.ListIdsFunc.ToSelefraDataSource(getter, x.TerraformResourceName),
+		TableName:        x.SelefraTableName,
+		Description:      x.Description,
+		ExpandClientTask: x.ExpandClientTask,
+		DataSource:       x.ListIdsFunc.ToSelefraDataSource(getter, x.TerraformResourceName),
 	}, diagnostics
 }
