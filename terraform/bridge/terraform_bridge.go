@@ -40,14 +40,13 @@ type ListIdsFunc func(ctx context.Context, clientMeta *schema.ClientMeta, client
 func (x *TerraformBridge) ListByIds(ctx context.Context, resourceName string, ids []string, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, resultChannel chan<- any) *schema.Diagnostics {
 	diagnostics := schema.NewDiagnostics()
 	for _, id := range ids {
-		diagnostics.AddDiagnostics(x.GetDetail(ctx, resourceName, id, map[string]any{}, clientMeta, client, task, resultChannel))
+		diagnostics.AddDiagnostics(x.GetDetail(ctx, resourceName, id, map[string]any{}, map[string]any{}, clientMeta, client, task, resultChannel))
 	}
 	return diagnostics
 }
 
-func (x *TerraformBridge) GetDetail(ctx context.Context, resourceName string, id string, meta map[string]any, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, resultChannel chan<- any) *schema.Diagnostics {
+func (x *TerraformBridge) GetDetail(ctx context.Context, resourceName string, id string, objectMap, meta map[string]any, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, resultChannel chan<- any) *schema.Diagnostics {
 	resource := x.provider.ResourcesMap().Get(resourceName)
-	objectMap := make(map[string]any, 0)
 	state, err := resource.InstanceState(id, objectMap, meta)
 	if err != nil {
 		return schema.NewDiagnostics().AddError(err)

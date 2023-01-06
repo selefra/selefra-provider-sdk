@@ -14,24 +14,110 @@ type TerraformBridgeGetter func(ctx context.Context, clientMeta *schema.ClientMe
 
 // ------------------------------------------------- ListIdsFunc -------------------------------------------------------
 
-// ListIdsFunc Gets one or more list functions
-type ListIdsFunc func(ctx context.Context, clientMeta *schema.ClientMeta, taskClient any, task *schema.DataSourcePullTask, resultChannel chan<- any) ([]string, *schema.Diagnostics)
+//// ListIdsFunc Gets one or more list functions
+//type ListIdsFunc func(ctx context.Context, clientMeta *schema.ClientMeta, taskClient any, task *schema.DataSourcePullTask, resultChannel chan<- any) ([]string, *schema.Diagnostics)
+//
+//// ToSelefraDataSource Convert the ListFunc to a Selefra DataSource so that you can connect it to the Selefra Provider
+//func (x ListIdsFunc) ToSelefraDataSource(getter TerraformBridgeGetter, resourceName string) schema.DataSource {
+//	return schema.DataSource{
+//		Pull: func(ctx context.Context, clientMeta *schema.ClientMeta, taskClient any, task *schema.DataSourcePullTask, resultChannel chan<- any) *schema.Diagnostics {
+//			diagnostics := schema.NewDiagnostics()
+//			ids, d := x(ctx, clientMeta, taskClient, task, resultChannel)
+//			if diagnostics.AddDiagnostics(d).HasError() {
+//				return diagnostics
+//			}
+//			if len(ids) == 0 {
+//				clientMeta.DebugF("exec table list return zero ids", zap.String("taskId", task.TaskId), zap.String("tableName", task.Table.TableName))
+//				return nil
+//			}
+//			clientMeta.DebugF("exec table list return no zero ids", zap.String("taskId", task.TaskId), zap.String("tableName", task.Table.TableName), zap.Strings("ids", ids))
+//			return getter(ctx, clientMeta, taskClient, task).ListByIds(ctx, resourceName, ids, clientMeta, taskClient, task, resultChannel)
+//		},
+//	}
+//}
+
+// ------------------------------------------------- --------------------------------------------------------------------
+
+// ResourceRequestParam Request parameters for the resource
+type ResourceRequestParam struct {
+
+	// ID of resource
+	ID string
+
+	// The parameters required to request the resource
+	ArgumentMap map[string]any
+}
+
+func NewResourceRequestParam() *ResourceRequestParam {
+	return &ResourceRequestParam{
+		ID:          "",
+		ArgumentMap: make(map[string]any),
+	}
+}
+
+func NewResourceRequestParamWithID(id string) *ResourceRequestParam {
+	param := NewResourceRequestParam()
+	param.ID = id
+	return param
+}
+
+func NewResourceRequestParamWithArgumentMap(argumentMap map[string]any) *ResourceRequestParam {
+	param := NewResourceRequestParam()
+	param.ArgumentMap = argumentMap
+	return param
+}
+
+func NewResourceRequestParamWithIDAndArgumentMap(id string, argumentMap map[string]any) *ResourceRequestParam {
+	param := NewResourceRequestParam()
+	param.ID = id
+	param.ArgumentMap = argumentMap
+	return param
+}
+
+// ListResourceParamsFunc Returns several parameters that request Resource usage
+type ListResourceParamsFunc func(ctx context.Context, clientMeta *schema.ClientMeta, taskClient any, task *schema.DataSourcePullTask, resultChannel chan<- any) ([]*ResourceRequestParam, *schema.Diagnostics)
 
 // ToSelefraDataSource Convert the ListFunc to a Selefra DataSource so that you can connect it to the Selefra Provider
-func (x ListIdsFunc) ToSelefraDataSource(getter TerraformBridgeGetter, resourceName string) schema.DataSource {
+func (x ListResourceParamsFunc) ToSelefraDataSource(getter TerraformBridgeGetter, resourceName string) schema.DataSource {
 	return schema.DataSource{
 		Pull: func(ctx context.Context, clientMeta *schema.ClientMeta, taskClient any, task *schema.DataSourcePullTask, resultChannel chan<- any) *schema.Diagnostics {
 			diagnostics := schema.NewDiagnostics()
-			ids, d := x(ctx, clientMeta, taskClient, task, resultChannel)
+
+			resourceRequestParams, d := x(ctx, clientMeta, taskClient, task, resultChannel)
 			if diagnostics.AddDiagnostics(d).HasError() {
 				return diagnostics
 			}
-			if len(ids) == 0 {
-				clientMeta.DebugF("exec table list return zero ids", zap.String("taskId", task.TaskId), zap.String("tableName", task.Table.TableName))
+
+			if len(resourceRequestParams) == 0 {
+				clientMeta.DebugF("exec table list return zero resource request params", zap.String("taskId", task.TaskId), zap.String("tableName", task.Table.TableName))
 				return nil
 			}
-			clientMeta.DebugF("exec table list return no zero ids", zap.String("taskId", task.TaskId), zap.String("tableName", task.Table.TableName), zap.Strings("ids", ids))
-			return getter(ctx, clientMeta, taskClient, task).ListByIds(ctx, resourceName, ids, clientMeta, taskClient, task, resultChannel)
+
+			terraformBridge := getter(ctx, clientMeta, taskClient, task)
+			for _, resourceRequestParam := range resourceRequestParams {
+
+				if resourceRequestParam.ArgumentMap == nil {
+					resourceRequestParam.ArgumentMap = make(map[string]any, 0)
+				}
+
+				id, exists := resourceRequestParam.ArgumentMap["id"]
+				if !exists {
+					// map not exists
+					if resourceRequestParam.ID != "" {
+						resourceRequestParam.ArgumentMap["id"] = resourceRequestParam.ID
+					}
+				} else {
+					// map exists
+					if resourceRequestParam.ID == "" {
+						idString, ok := id.(string)
+						if ok {
+							resourceRequestParam.ID = idString
+						}
+					}
+				}
+				diagnostics.AddDiagnostics(terraformBridge.GetDetail(ctx, resourceName, resourceRequestParam.ID, resourceRequestParam.ArgumentMap, map[string]any{}, clientMeta, taskClient, task, resultChannel))
+			}
+			return diagnostics
 		},
 	}
 }
@@ -61,14 +147,14 @@ type SelefraTerraformResource struct {
 	//SubTables []*schema.Table
 	SubTables []string
 
-	// The table must return a list of ids
-	ListIdsFunc ListIdsFunc
+	// take resource params
+	ListResourceParamsFunc ListResourceParamsFunc
 }
 
 func (x *SelefraTerraformResource) ToTable(getter TerraformBridgeGetter) (*schema.Table, *schema.Diagnostics) {
 	diagnostics := schema.NewDiagnostics()
 
-	if x.ListIdsFunc == nil {
+	if x.ListResourceParamsFunc == nil {
 		return nil, diagnostics.AddErrorMsg("table %s's ListIdsFunc must be implemented", x.SelefraTableName)
 	}
 
@@ -76,6 +162,6 @@ func (x *SelefraTerraformResource) ToTable(getter TerraformBridgeGetter) (*schem
 		TableName:        x.SelefraTableName,
 		Description:      x.Description,
 		ExpandClientTask: x.ExpandClientTask,
-		DataSource:       x.ListIdsFunc.ToSelefraDataSource(getter, x.TerraformResourceName),
+		DataSource:       x.ListResourceParamsFunc.ToSelefraDataSource(getter, x.TerraformResourceName),
 	}, diagnostics
 }
