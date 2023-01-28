@@ -165,7 +165,7 @@ func (x *Provider) PullTables(ctx context.Context, request *shard.PullTablesRequ
 
 	defer func() {
 		if r := recover(); r != nil {
-			x.ClientMeta.ErrorF("exec PullTables panic", zap.Error(r.(error)))
+			x.ClientMeta.ErrorF("exec PullTables panic", zap.Any("error", r))
 			err = sender.Send(&shard.PullTablesResponse{
 				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec PullTables panic: %s", r),
 			})
@@ -356,3 +356,5 @@ func (x *Provider) Init(ctx context.Context, request *shard.ProviderInitRequest)
 func (x *Provider) Runtime() *ProviderRuntime {
 	return x.runtime
 }
+
+// ------------------------------------------------- --------------------------------------------------------------------

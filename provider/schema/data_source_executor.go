@@ -129,7 +129,7 @@ func (x *DataSourceExecutor) execTaskWithRecovery(consumerId uint64, task *DataS
 
 	defer func() {
 		if r := recover(); r != nil {
-			x.clientMeta.Error("exec task panic", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId), zap.Any("task", task), zap.Error(r.(error)))
+			x.clientMeta.Error("exec task panic", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId), zap.Any("task", task), zap.Any("error", r))
 			diagnostics.AddErrorMsg("exec task panic, table = %s, msg = %s", task.Table.TableName, r)
 		}
 	}()
