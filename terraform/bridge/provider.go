@@ -43,10 +43,11 @@ func NewProvider(ctx context.Context, client proto.ProviderClient, terraformVers
 		return nil, fmt.Errorf("error unmarshaling resources: %w", err)
 	}
 
-	p.dataSources, err = unmarshalResourceMap(p, schemaResponse.DataSourceSchemas)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling data sources: %w", err)
-	}
+	p.dataSources, _ = unmarshalResourceMap(p, schemaResponse.DataSourceSchemas)
+	// if err != nil {
+	// 	return nil, nil
+	// 	// return nil, fmt.Errorf("error unmarshaling data sources: %w", err)
+	// }
 
 	p.config, err = unmarshalResource(p, "", schemaResponse.Provider)
 	if err != nil {
