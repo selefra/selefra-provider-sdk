@@ -15,7 +15,7 @@ func (x *ColumnValueExtractorParentColumnValue) Name() string {
 	return "parent-column-value-column-value-extractor"
 }
 
-func (x *ColumnValueExtractorParentColumnValue) Extract(ctx context.Context, clientMeta *schema.ClientMeta, client any,  task *schema.DataSourcePullTask, row *schema.Row, column *schema.Column, result any) (any, *schema.Diagnostics) {
+func (x *ColumnValueExtractorParentColumnValue) Extract(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, row *schema.Row, column *schema.Column, result any) (any, *schema.Diagnostics) {
 
 	diagnostics := schema.NewDiagnostics()
 
@@ -49,6 +49,10 @@ func (x *ColumnValueExtractorParentColumnValue) Validate(ctx context.Context, cl
 	}
 
 	return nil
+}
+
+func (x *ColumnValueExtractorParentColumnValue) GetParentTableColumnName() string {
+	return x.parentTableColumnName
 }
 
 func ParentColumnValue(parentTableColumnName string) *ColumnValueExtractorParentColumnValue {
