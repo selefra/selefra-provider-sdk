@@ -8,29 +8,50 @@ import (
 )
 
 func TestPostgresqlStorage_Lock(t *testing.T) {
-	err := testPostgresqlStorage.Lock(context.Background(), "test", "001")
-	assert.Nil(t, err)
-	time.Sleep(time.Second * 30)
-	err = testPostgresqlStorage.UnLock(context.Background(), "test", "001")
-	assert.Nil(t, err)
-	time.Sleep(time.Second * 10)
 
-	//for i := 0; i < 100; i++ {
-	//	err := testPostgresqlStorage.Lock(context.Background(), "test", "001")
-	//	if err != nil {
-	//		fmt.Println(err)
-	//	} else {
-	//		fmt.Println(fmt.Sprintf("%d: lock success", i))
-	//	}
-	//}
+	lockId := "test"
+	ownerId := "001"
+
+	err := testPostgresqlStorage.Lock(context.Background(), lockId, ownerId)
+	assert.Nil(t, err)
+	time.Sleep(time.Second * 3)
+	err = testPostgresqlStorage.UnLock(context.Background(), lockId, ownerId)
+	assert.Nil(t, err)
+	time.Sleep(time.Second * 3)
+
+	// no lock or lock not mime
+	err = testPostgresqlStorage.UnLock(context.Background(), lockId, ownerId)
+	assert.NotNil(t, err)
+
+	// lock
+	err = testPostgresqlStorage.Lock(context.Background(), lockId, ownerId)
+	assert.Nil(t, err)
+
+	// unlock
+	err = testPostgresqlStorage.UnLock(context.Background(), lockId, ownerId)
+	assert.Nil(t, err)
 
 }
 
-func TestPostgresqlStorage_RefreshLockExpiredTime(t *testing.T) {
-
-}
-
-func TestPostgresqlStorage_UnLock(t *testing.T) {
-	err := testPostgresqlStorage.UnLock(context.Background(), "test", "001")
-	assert.Nil(t, err)
-}
+//func TestPostgresqlStorage_RefreshLockExpiredTime(t *testing.T) {
+//
+//}
+//
+//func TestPostgresqlStorage_UnLock(t *testing.T) {
+//
+//	lockId := "test"
+//	ownerId := "001"
+//
+//	// no lock or lock not mime
+//	err := testPostgresqlStorage.UnLock(context.Background(), lockId, ownerId)
+//	assert.NotNil(t, err)
+//
+//	// lock
+//	err = testPostgresqlStorage.Lock(context.Background(), lockId, ownerId)
+//	assert.Nil(t, err)
+//
+//	// unlock
+//	err = testPostgresqlStorage.UnLock(context.Background(), lockId, ownerId)
+//	assert.Nil(t, err)
+//
+//}
