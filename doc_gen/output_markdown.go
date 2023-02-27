@@ -24,6 +24,9 @@ func New(provider *provider.Provider, outputDirectory string) *ProviderDocumentG
 
 func (x *ProviderDocumentGenerator) Run() error {
 
+	// Make sure the output directory exists
+	_ = os.MkdirAll(x.outputDirectory, os.ModePerm)
+
 	// table
 	tableNameSlice := make([]string, 0)
 	for _, table := range x.provider.TableList {

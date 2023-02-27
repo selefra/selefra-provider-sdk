@@ -8,9 +8,8 @@ import (
 	"testing"
 )
 
-func TestProviderDocumentGenerator_Run(t *testing.T) {
-
-	myProvider := &provider.Provider{
+func getTestProvider() *provider.Provider {
+	testProvider := &provider.Provider{
 		Name:        "test-provider",
 		Version:     "v0.0.1",
 		Description: "test provider",
@@ -125,7 +124,12 @@ func TestProviderDocumentGenerator_Run(t *testing.T) {
 			},
 		},
 	}
+	return testProvider
+}
 
-	New(myProvider, "./").Run()
+func TestProviderDocumentGenerator_Run(t *testing.T) {
+
+	myProvider := getTestProvider()
+	New(myProvider, "./docs/").Run()
 
 }
