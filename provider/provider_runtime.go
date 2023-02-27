@@ -477,3 +477,23 @@ func (x *ProviderRuntime) flatTable(table *schema.Table) []string {
 	}
 	return tableNameSlice
 }
+
+// ------------------------------------------------- --------------------------------------------------------------------
+
+func (x *ProviderRuntime) MakeToParentTableMap() map[string]*schema.Table {
+	toParentTableMap := make(map[string]*schema.Table)
+	for _, table := range x.myProvider.TableList {
+		x.internalMakeToParentTableMap(toParentTableMap, table)
+		toParentTableMap[table.TableName] = nil
+	}
+	return toParentTableMap
+}
+
+func (x *ProviderRuntime) internalMakeToParentTableMap(toParentTableMap map[string]*schema.Table, table *schema.Table) {
+	for _, subTable := range table.SubTables {
+		toParentTableMap[subTable.TableName] = table
+		x.internalMakeToParentTableMap(toParentTableMap, subTable)
+	}
+}
+
+// ------------------------------------------------- --------------------------------------------------------------------

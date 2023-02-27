@@ -5,7 +5,7 @@ import (
 )
 
 // Convert Responsible for converting standard column types to their Postgresql counterparts
-func getColumnPgType(table *schema.Table, column *schema.Column) (string, *schema.Diagnostics) {
+func GetColumnPostgreSQLType(table *schema.Table, column *schema.Column) (string, *schema.Diagnostics) {
 	diagnostics := schema.NewDiagnostics()
 
 	switch column.Type {

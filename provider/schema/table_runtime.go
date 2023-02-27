@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/emirpasic/gods/maps/treemap"
+	"github.com/selefra/selefra-utils/pkg/pointer"
 )
 
 // TableRuntime The runtime of the table, the relevant context during the runtime and so forth will be taken care of by this struct
@@ -148,4 +149,125 @@ func (x *TableRuntime) topologicalSortingColumnExtractorSorted(ctx context.Conte
 // Validate The table is self-checked
 func (x *TableRuntime) Validate(ctx context.Context, clientMeta *ClientMeta, parentTable *Table, table *Table) *Diagnostics {
 	return x.validator.validate(ctx, clientMeta, parentTable, table)
+}
+
+// FindUniqGroup The current column may not be unique by itself, but it is unique when combined with other columns. Get the unique group
+func (x *TableRuntime) FindUniqGroup(columnName string) []string {
+
+	if x.myTable.Options == nil {
+		return nil
+	}
+
+	// Primary key
+	for _, pkColumnName := range x.myTable.Options.PrimaryKeys {
+		if pkColumnName == columnName {
+			return append([]string{}, x.myTable.Options.PrimaryKeys...)
+		}
+	}
+
+	// Unique index
+	for _, indexesSchema := range x.myTable.Options.Indexes {
+		if !pointer.FromBoolPointer(indexesSchema.IsUniq) {
+			continue
+		}
+		for _, indexColumnName := range indexesSchema.ColumnNames {
+			if indexColumnName == columnName {
+				return append([]string{}, indexesSchema.ColumnNames...)
+			}
+		}
+	}
+
+	return nil
+}
+
+// IsUniq Whether the value of this column is unique
+func (x *TableRuntime) IsUniq(columnName string) bool {
+
+	// Or there's a unique index on the column
+	columnSchema, exists := x.columnMap[columnName]
+	if exists && columnSchema.Options.IsUniq() {
+		return true
+	}
+
+	// Is the primary key, and the primary key has only this column, the value of this column is considered unique
+	// If it's a primary key column, but the primary key column is not unique
+	if x.myTable.Options != nil && len(x.myTable.Options.PrimaryKeys) == 1 && x.myTable.Options.PrimaryKeys[0] == columnName {
+		return true
+	}
+
+	// Unique index
+	if x.myTable.Options != nil {
+		for _, indexesSchema := range x.myTable.Options.Indexes {
+			if !pointer.FromBoolPointer(indexesSchema.IsUniq) {
+				continue
+			}
+			if len(indexesSchema.ColumnNames) == 1 && indexesSchema.ColumnNames[0] == columnName {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// IsPrimaryKey Whether this column is a primary key column
+// It's a primary key itself, or there are multiple primary keys, and it's one of them
+func (x *TableRuntime) IsPrimaryKey(columnName string) bool {
+	if x.myTable.Options == nil {
+		return false
+	}
+	for _, pkColumnName := range x.myTable.Options.PrimaryKeys {
+		if pkColumnName == columnName {
+			return true
+		}
+	}
+	return false
+}
+
+// IsNotNull Whether the value of this column is non-null
+func (x *TableRuntime) IsNotNull(columnName string) bool {
+
+	// As long as it's a primary key, it's considered non-null
+	if x.myTable.Options != nil {
+		for _, pkColumnName := range x.myTable.Options.PrimaryKeys {
+			if pkColumnName == columnName {
+				return true
+			}
+		}
+	}
+
+	// Or the column explicitly says, this column is not empty
+	columnSchema, exists := x.columnMap[columnName]
+	if exists && columnSchema.Options.IsNotNull() {
+		return true
+	}
+
+	return false
+}
+
+// IsIndexed Whether this column is the column to be indexed
+func (x *TableRuntime) IsIndexed(columnName string) bool {
+
+	// If this column is a primary key column and conforms to the rule of prefix indexing, it is considered indexed
+	if x.myTable.Options != nil {
+		if len(x.myTable.Options.PrimaryKeys) > 0 && x.myTable.Options.PrimaryKeys[0] == columnName {
+			return true
+		}
+	}
+
+	// Or add a unique index
+	if x.IsUniq(columnName) {
+		return true
+	}
+
+	// An index is declared in the table option, and the column must conform to the characteristics of a prefix index
+	if x.myTable.Options != nil {
+		for _, indexSchema := range x.myTable.Options.Indexes {
+			if len(indexSchema.ColumnNames) > 0 && indexSchema.ColumnNames[0] == columnName {
+				return true
+			}
+		}
+	}
+
+	return false
 }

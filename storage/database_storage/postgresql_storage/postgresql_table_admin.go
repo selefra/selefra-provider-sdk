@@ -133,7 +133,7 @@ func (x *PostgresqlTableAdmin) buildCreateTableSqlSlice(ctx context.Context, tab
 
 	for index, column := range table.Columns {
 
-		s, convertorDiagnostics := getColumnPgType(table, column)
+		s, convertorDiagnostics := GetColumnPostgreSQLType(table, column)
 		if diagnostics.AddDiagnostics(convertorDiagnostics).HasError() {
 			return nil, diagnostics
 		}
