@@ -78,7 +78,7 @@ func TestPostgresqlKeyValueExecutor_ListKey(t *testing.T) {
 	// clear
 	rows, d := testKeyValueExecutor.ListKey(context.Background())
 	assert.False(t, diagnostics.Add(d).HasError())
-	for i := 0; i < rows.ColumnCount(); i++ {
+	for i := 0; i < rows.RowCount(); i++ {
 		row, err := rows.GetRow(i)
 		assert.Nil(t, err)
 		key, err := row.GetString("key")
