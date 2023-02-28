@@ -22,8 +22,11 @@ func (x *providerValidator) validate(ctx context.Context, myProvider *Provider, 
 	diagnostics := schema.NewDiagnostics()
 
 	// name
+	providerNameLimit := 60
 	if myProvider.Name == "" {
 		diagnostics.AddErrorMsg(x.buildErrorMsg("provider name must not be empty"))
+	} else if len(myProvider.Name) > providerNameLimit {
+		diagnostics.AddErrorMsg(x.buildErrorMsg("provider name length cannot greater than %d", providerNameLimit))
 	}
 
 	// version
