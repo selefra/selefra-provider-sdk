@@ -251,7 +251,7 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 		if err != nil {
 			x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
 			if leftTryTimes > 0 {
-				return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
+				return x.unlockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
 			}
 			return err
 		}
