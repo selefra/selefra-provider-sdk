@@ -330,6 +330,9 @@ func (x *PostgresqlStorage) GetDatabaseTime(ctx context.Context) (time.Time, err
 	if err != nil {
 		return zero, err
 	}
+	defer func() {
+		rs.Close()
+	}()
 	if !rs.Next() {
 		return zero, errors.New("can not query database time")
 	}
