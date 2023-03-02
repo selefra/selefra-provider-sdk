@@ -55,3 +55,9 @@ func TestPostgresqlStorage_Lock(t *testing.T) {
 //	assert.Nil(t, err)
 //
 //}
+
+func TestPostgresqlStorage_GetDatabaseTime(t *testing.T) {
+	databaseTime, err := testPostgresqlStorage.GetTime(context.Background())
+	assert.Nil(t, err)
+	assert.False(t, databaseTime.IsZero())
+}

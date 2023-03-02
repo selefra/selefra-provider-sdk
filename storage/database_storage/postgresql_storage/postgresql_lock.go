@@ -76,7 +76,15 @@ func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId s
 		if information.OwnerId == ownerId {
 			// Is reentrant to acquire the lock, increase the number of locks by 1
 			information.LockCount++
-			information.ExceptedExpireTime = x.nextExceptedExpireTime()
+			expireTime, err := x.nextExceptedExpireTime(ctx)
+			if err != nil {
+				x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+				if leftTryTimes > 0 {
+					return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
+				}
+				return err
+			}
+			information.ExceptedExpireTime = expireTime
 			// compare and set
 			updateSql := `UPDATE selefra_meta_kv SET value = $1 WHERE key = $2 AND value = $3 `
 			rs, err := x.pool.Exec(ctx, updateSql, information.ToJsonString(), lockKey, oldJsonString)
@@ -98,7 +106,15 @@ func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId s
 			return ErrLockFailed
 		} else {
 			// If a lock exists but is not held by itself, check to see if it is an expired lock
-			if information.ExceptedExpireTime.After(time.Now()) {
+			databaseTime, err := x.GetTime(ctx)
+			if err != nil {
+				x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+				if leftTryTimes > 0 {
+					return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
+				}
+				return err
+			}
+			if information.ExceptedExpireTime.After(databaseTime) {
 				x.ErrorF("lock is not mine and it is still ok, so i give up, ok, you win", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
 				// If the lock is not expired, it has to be abandoned
 				return ErrLockFailed
@@ -126,12 +142,21 @@ func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId s
 
 	x.DebugF("lock not exists, try lock with cas", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
 
+	expireTime, err := x.nextExceptedExpireTime(ctx)
+	if err != nil {
+		x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+		if leftTryTimes > 0 {
+			return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
+		}
+		return err
+	}
+
 	// The lock does not exist. Attempt to obtain the lock
 	lockInformation := &LockInformation{
 		OwnerId:   ownerId,
 		LockCount: 1,
 		// By default, a lock is expected to hold for at least ten minutes
-		ExceptedExpireTime: x.nextExceptedExpireTime(),
+		ExceptedExpireTime: expireTime,
 	}
 	sql := `INSERT INTO selefra_meta_kv (
                              "key",
@@ -222,7 +247,15 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 	if lockInformation.LockCount > 0 {
 		// It is not released completely, but the count is reduced by 1 and updated back to the database
 		// Is reentrant to acquire the lock, increase the number of locks by 1
-		lockInformation.ExceptedExpireTime = x.nextExceptedExpireTime()
+		expireTime, err := x.nextExceptedExpireTime(ctx)
+		if err != nil {
+			x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+			if leftTryTimes > 0 {
+				return x.unlockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
+			}
+			return err
+		}
+		lockInformation.ExceptedExpireTime = expireTime
 		// compare and set
 		updateSql := `UPDATE selefra_meta_kv SET value = $1 WHERE key = $2 AND value = $3 `
 		rs, err := x.pool.Exec(ctx, updateSql, lockInformation.ToJsonString(), lockKey, oldJsonString)
@@ -282,9 +315,34 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 	return nil
 }
 
-func (x *PostgresqlStorage) nextExceptedExpireTime() time.Time {
-	return time.Now().Add(time.Minute * 10)
+func (x *PostgresqlStorage) nextExceptedExpireTime(ctx context.Context) (time.Time, error) {
+	databaseTime, err := x.GetTime(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return databaseTime.Add(time.Minute * 10), nil
 }
+
+//func (x *PostgresqlStorage) x.GetTime(ctx context.Context) (time.Time, error) {
+//	var zero time.Time
+//	sql := `SELECT NOW()`
+//	rs, err := x.pool.Query(ctx, sql)
+//	if err != nil {
+//		return zero, err
+//	}
+//	defer func() {
+//		rs.Close()
+//	}()
+//	if !rs.Next() {
+//		return zero, errors.New("can not query database time")
+//	}
+//	var dbTime time.Time
+//	err = rs.Scan(&dbTime)
+//	if err != nil {
+//		return zero, err
+//	}
+//	return dbTime, nil
+//}
 
 // read lock information from db
 func (x *PostgresqlStorage) readLockInformation(ctx context.Context, lockKey string) (*LockInformation, error) {
@@ -338,8 +396,18 @@ func (x *LockRefreshGoroutine) Start() {
 		continueFailedCount := 0
 		for x.isRunning.Load() {
 
+			// query database time
 			ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*60)
-			err := x.storage.refreshLockExpiredTime(ctx, x.lockId, x.ownerId, time.Now().Add(time.Minute*10))
+			databaseTime, err := x.storage.GetTime(ctx)
+			cancelFunc()
+			if err != nil {
+				x.storage.ErrorF("get database time error", zap.Error(err))
+				time.Sleep(time.Second * 10)
+				continue
+			}
+
+			ctx, cancelFunc = context.WithTimeout(context.Background(), time.Second*60)
+			err = x.storage.refreshLockExpiredTime(ctx, x.lockId, x.ownerId, databaseTime.Add(time.Minute*10))
 			cancelFunc()
 
 			if err != nil {

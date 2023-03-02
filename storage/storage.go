@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"github.com/selefra/selefra-provider-sdk/provider/schema"
+	"time"
 )
 
 // Storage Represents a storage medium, which may be implemented in many different ways
@@ -34,6 +35,15 @@ type Storage interface {
 	KeyValueExecutor
 
 	Lock
+
+	TimeProvider
+}
+
+// TimeProvider Acquired time
+type TimeProvider interface {
+
+	// GetTime In a distributed system, use a uniform date
+	GetTime(ctx context.Context) (time.Time, error)
 }
 
 type UseClientMeta interface {
