@@ -96,3 +96,9 @@ func TestPostgresqlCRUDExecutor_Insert(t *testing.T) {
 
 	assert.False(t, diagnostics.Add(testTableAdmin.TableDrop(context.Background(), table)).HasError())
 }
+
+func TestPostgresqlStorage_GetTime(t *testing.T) {
+	time, err := testPostgresqlStorage.GetTime(context.Background())
+	assert.Nil(t, err)
+	assert.False(t, time.IsZero())
+}

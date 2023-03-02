@@ -2,6 +2,7 @@ package postgresql_storage
 
 import (
 	"context"
+	"errors"
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -122,4 +123,25 @@ func (x *PostgresqlCRUDExecutor) Insert(ctx context.Context, table *schema.Table
 	}
 
 	return diagnostics
+}
+
+func (x *PostgresqlStorage) GetTime(ctx context.Context) (time.Time, error) {
+	var zero time.Time
+	sql := `SELECT NOW()`
+	rs, err := x.pool.Query(ctx, sql)
+	if err != nil {
+		return zero, err
+	}
+	defer func() {
+		rs.Close()
+	}()
+	if !rs.Next() {
+		return zero, errors.New("can not query database time")
+	}
+	var dbTime time.Time
+	err = rs.Scan(&dbTime)
+	if err != nil {
+		return zero, err
+	}
+	return dbTime, nil
 }

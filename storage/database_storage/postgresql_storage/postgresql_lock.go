@@ -106,7 +106,7 @@ func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId s
 			return ErrLockFailed
 		} else {
 			// If a lock exists but is not held by itself, check to see if it is an expired lock
-			databaseTime, err := x.GetDatabaseTime(ctx)
+			databaseTime, err := x.GetTime(ctx)
 			if err != nil {
 				x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
 				if leftTryTimes > 0 {
@@ -316,33 +316,33 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 }
 
 func (x *PostgresqlStorage) nextExceptedExpireTime(ctx context.Context) (time.Time, error) {
-	databaseTime, err := x.GetDatabaseTime(ctx)
+	databaseTime, err := x.GetTime(ctx)
 	if err != nil {
 		return time.Time{}, err
 	}
 	return databaseTime.Add(time.Minute * 10), nil
 }
 
-func (x *PostgresqlStorage) GetDatabaseTime(ctx context.Context) (time.Time, error) {
-	var zero time.Time
-	sql := `SELECT NOW()`
-	rs, err := x.pool.Query(ctx, sql)
-	if err != nil {
-		return zero, err
-	}
-	defer func() {
-		rs.Close()
-	}()
-	if !rs.Next() {
-		return zero, errors.New("can not query database time")
-	}
-	var dbTime time.Time
-	err = rs.Scan(&dbTime)
-	if err != nil {
-		return zero, err
-	}
-	return dbTime, nil
-}
+//func (x *PostgresqlStorage) x.GetTime(ctx context.Context) (time.Time, error) {
+//	var zero time.Time
+//	sql := `SELECT NOW()`
+//	rs, err := x.pool.Query(ctx, sql)
+//	if err != nil {
+//		return zero, err
+//	}
+//	defer func() {
+//		rs.Close()
+//	}()
+//	if !rs.Next() {
+//		return zero, errors.New("can not query database time")
+//	}
+//	var dbTime time.Time
+//	err = rs.Scan(&dbTime)
+//	if err != nil {
+//		return zero, err
+//	}
+//	return dbTime, nil
+//}
 
 // read lock information from db
 func (x *PostgresqlStorage) readLockInformation(ctx context.Context, lockKey string) (*LockInformation, error) {
@@ -398,7 +398,7 @@ func (x *LockRefreshGoroutine) Start() {
 
 			// query database time
 			ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*60)
-			databaseTime, err := x.storage.GetDatabaseTime(ctx)
+			databaseTime, err := x.storage.GetTime(ctx)
 			cancelFunc()
 			if err != nil {
 				x.storage.ErrorF("get database time error", zap.Error(err))
