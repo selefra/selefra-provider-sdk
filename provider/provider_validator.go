@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/selefra/selefra-provider-sdk/provider/schema"
-	"github.com/spf13/viper"
-	"strings"
+	"gopkg.in/yaml.v3"
 )
 
 // Used to verify the validity of the provider
@@ -37,8 +36,8 @@ func (x *providerValidator) validate(ctx context.Context, myProvider *Provider, 
 	// provider config
 	if myProvider.ConfigMeta.GetDefaultConfigTemplate != nil {
 		configTemplate := myProvider.ConfigMeta.GetDefaultConfigTemplate(ctx)
-		config := viper.New()
-		err := config.ReadConfig(strings.NewReader(configTemplate))
+		var node yaml.Node
+		err := yaml.Unmarshal([]byte(configTemplate), &node)
 		if err != nil {
 			return diagnostics.AddErrorMsg(x.buildErrorMsg("GetDefaultConfigTemplate return default config template parse .yaml error: %s", err.Error()))
 		}
