@@ -33,7 +33,7 @@ func (x *TerraformProviderDownloader) Download(targetDirectory string) (string, 
 		return "", nil
 	}
 
-	providerDownloadDirectory := targetDirectory + "/" + choosedFile.ProviderName + "/" + choosedFile.ProviderVersion
+	providerDownloadDirectory := filepath.Join(targetDirectory, choosedFile.ProviderName, choosedFile.ProviderVersion)
 	stat, err := os.Stat(targetDirectory)
 	if err == nil && stat.IsDir() {
 		executable, err := x.findExecutable(providerDownloadDirectory)

@@ -268,12 +268,15 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 				item := reflectValue.Index(index).Interface()
 				resultSlice = append(resultSlice, item)
 			}
+			clientMeta.DebugF("taskId = %s, enable DataSourcePullResultAutoExpand, result auto expand to %d", task.TaskId, reflectValue.Len())
 		default:
+			clientMeta.DebugF("taskId = %s, enable DataSourcePullResultAutoExpand, result only one", task.TaskId)
 			resultSlice = append(resultSlice, result)
 		}
 	} else {
 		// no expand
 		resultSlice = append(resultSlice, result)
+		clientMeta.DebugF("taskId = %s, disable DataSourcePullResultAutoExpand", task.TaskId)
 	}
 
 	var saveSuccessRows *schema.Rows
@@ -286,7 +289,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 		if d != nil && d.HasError() {
 			// If an error occurs and ignore is configured, the end occurs
 			if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
-				clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult")
+				clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult, error msg = %s", task.TaskId, diagnostics.String())
 			} else {
 				return nil, nil, diagnostics
 			}
@@ -326,7 +329,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 
 			// If an error occurs and ignore is configured, the end occurs
 			if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
-				clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult")
+				clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult, error msg: %s", task.TaskId, diagnostics.String())
 				continue
 			} else {
 				return nil, nil, diagnostics
@@ -375,7 +378,7 @@ func (x *ProviderRuntime) transformSingleResult(ctx context.Context, clientMeta 
 
 		// If an error occurs and ignore is configured, the end occurs
 		if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnTransformerRow) {
-			clientMeta.DebugF("taskId = %s, IgnoredErrorOnTransformerRow", task.TaskId)
+			clientMeta.ErrorF("taskId = %s, IgnoredErrorOnTransformerRow, msg: %s", task.TaskId, diagnostics.String())
 			return nil, diagnostics
 		}
 
