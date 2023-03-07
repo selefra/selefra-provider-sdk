@@ -17,8 +17,11 @@ func (x *tableValidator) validate(ctx context.Context, clientMeta *ClientMeta, p
 	diagnostics := NewDiagnostics()
 
 	// table name
+	tableNameLimit := 60
 	if myTable.TableName == "" {
 		diagnostics.AddErrorMsg(x.buildMsg("table name must not be empty"))
+	} else if len(myTable.TableName) > tableNameLimit {
+		diagnostics.AddErrorMsg(x.buildMsg(fmt.Sprintf("table name length cannot greater than %d", tableNameLimit)))
 	}
 
 	// table description

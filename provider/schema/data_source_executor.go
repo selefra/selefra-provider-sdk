@@ -7,7 +7,6 @@ import (
 	"github.com/selefra/selefra-utils/pkg/id_util"
 	"github.com/selefra/selefra-utils/pkg/reflect_util"
 	"github.com/selefra/selefra-utils/pkg/runtime_util"
-	"go.uber.org/zap"
 	"strings"
 	"sync"
 	"time"
@@ -33,7 +32,7 @@ type DataSourceExecutor struct {
 }
 
 // DefaultWorkerNum The default number of threads when the number of worker threads is not specified
-var DefaultWorkerNum uint64 = 1
+var DefaultWorkerNum uint64 = 100
 
 // NewDataSourcePullExecutor Create a data source data pull actuator
 // @params: workerNum Number of working coroutines
@@ -64,7 +63,7 @@ func NewDataSourcePullExecutor(workerNum uint64, clientMeta *ClientMeta, errorsH
 
 // Submit Submit a data source pull task for execution
 func (x *DataSourceExecutor) Submit(ctx context.Context, task *DataSourcePullTask) *Diagnostics {
-	x.clientMeta.DebugF("executor submit task", zap.String("executorId", x.executorId), zap.String("taskId", task.TaskId))
+	x.clientMeta.DebugF("executorId = %s, taskId = %s, executor submit task", x.executorId, task.TaskId)
 	x.taskQueue.Add(task)
 	return nil
 }
@@ -72,7 +71,7 @@ func (x *DataSourceExecutor) Submit(ctx context.Context, task *DataSourcePullTas
 // ShutdownAndAwaitTermination Close the task queue and hold the current coroutine until the task completes or times out
 func (x *DataSourceExecutor) ShutdownAndAwaitTermination(ctx context.Context) *Diagnostics {
 
-	x.clientMeta.DebugF("executor shutdown and await termination", zap.String("executorId", x.executorId))
+	x.clientMeta.DebugF("executorId = %s, executor shutdown and await termination", x.executorId)
 	x.wg.Wait()
 
 	return nil
@@ -80,7 +79,7 @@ func (x *DataSourceExecutor) ShutdownAndAwaitTermination(ctx context.Context) *D
 
 func (x *DataSourceExecutor) runWorkers() {
 
-	x.clientMeta.DebugF("executor begin run worker", zap.String("executorId", x.executorId), zap.Uint64("workerNum", x.workerNum))
+	x.clientMeta.DebugF("executorId = %s, workerNum = %d, executor begin run worker", x.executorId, x.workerNum)
 
 	semaphore := NewConsumerSemaphore(x.clientMeta)
 
@@ -94,7 +93,7 @@ func (x *DataSourceExecutor) runWorkers() {
 
 			defer func() {
 				x.wg.Done()
-				x.clientMeta.DebugF("executor consumer exit", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId))
+				x.clientMeta.DebugF("executorId = %s, consumerId = %d, executor consumer exit", x.executorId, consumerId)
 			}()
 
 			for !semaphore.IsAllConsumerDone() {
@@ -104,12 +103,16 @@ func (x *DataSourceExecutor) runWorkers() {
 					semaphore.Running(consumerId)
 
 					taskStartTime := time.Now()
-					x.clientMeta.DebugF("executor begin exec task", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId), zap.String("taskId", task.TaskId))
+					x.clientMeta.DebugF("executorId = %s, consumerId = %d, taskId = %s, executor begin exec task", x.executorId, consumerId, task.TaskId)
 
 					diagnostics := x.execTaskWithRecovery(consumerId, task)
 
 					execTaskCost := time.Now().Sub(taskStartTime)
-					x.clientMeta.DebugF("executor exec task done", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId), zap.String("taskId", task.TaskId), zap.String("cost", execTaskCost.String()))
+					resultMessage := ""
+					if diagnostics != nil {
+						resultMessage = diagnostics.String()
+					}
+					x.clientMeta.DebugF("executorId = %s, consumerId = %d, taskId = %s, executor exec task done, cost = %s, result message = %s", x.executorId, consumerId, task.TaskId, execTaskCost.String(), resultMessage)
 
 					task.DiagnosticsChannel <- diagnostics
 
@@ -129,7 +132,7 @@ func (x *DataSourceExecutor) execTaskWithRecovery(consumerId uint64, task *DataS
 
 	defer func() {
 		if r := recover(); r != nil {
-			x.clientMeta.Error("exec task panic", zap.String("executorId", x.executorId), zap.Uint64("consumerId", consumerId), zap.Any("task", task), zap.Any("error", r))
+			x.clientMeta.ErrorF("executorId = %s, consumerId = %d, taskId = %s, exec task panic, error msg = %v", x.executorId, consumerId, task.TaskId, r)
 			diagnostics.AddErrorMsg("exec task panic, table = %s, msg = %s", task.Table.TableName, r)
 		}
 	}()
@@ -158,6 +161,7 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 
 	// just init client task context if it is not
 	if !task.IsExpandDone {
+		x.clientMeta.DebugF("taskId = %s, IsExpandDone not ok", taskId)
 		x.expandTask(context.Background(), task)
 		return
 	}
@@ -201,7 +205,12 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 		d := task.Table.DataSource.Pull(context.Background(), x.clientMeta, task.Client, task, resultChannel)
 
 		clientCost := time.Now().Sub(clientBegin)
-		x.clientMeta.DebugF("taskId = %s, execution pull table done, cost = %s", taskId, clientCost.String())
+		pullTableResultMsg := ""
+		if d != nil {
+			pullTableResultMsg = d.String()
+		}
+		// If ignore errors are configured, the error message is typed into the log, although it is not thrown upward
+		x.clientMeta.DebugF("taskId = %s, execution pull table done, cost = %s, pullTableResultMsg = %s", taskId, clientCost.String(), pullTableResultMsg)
 
 		// send diagnostics if not ignore error
 		if x.errorsHandlerMeta.IsIgnore(IgnoredErrorOnPullTable) {
@@ -240,14 +249,19 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 
 		}()
 
+		// Number of task results statistics
+		taskResultCount := 0
 		// collect result
 		for result := range resultChannel {
+
+			taskResultCount++
 
 			// drop nil result
 			if reflect_util.IsNil(result) {
 				x.clientMeta.DebugF("taskId = %s, return nil result, ignored it", taskId)
 				continue
 			}
+			x.clientMeta.DebugF("taskId = %s, find one result", taskId)
 
 			// run task result handler
 			rows, resultSlice, d := x.execResultHandlerWithRecover(task.Ctx, x.clientMeta, task.Client, task, result)
@@ -255,6 +269,7 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 				if !isIgnorePullTableError {
 					task.DiagnosticsChannel <- d
 				}
+				x.clientMeta.ErrorF("taskId = %s, execResultHandlerWithRecover return error: %s", taskId, d.String())
 			} else {
 				task.DiagnosticsChannel <- d
 			}
@@ -293,11 +308,15 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 						IsExpandDone: true,
 						Client:       task.Client,
 					}
-					x.clientMeta.DebugF("taskId = %s, start subTaskId = %s, parent row = %s, parent raw result = %s", subTask.TaskId, row, result)
+					x.clientMeta.DebugF("taskId = %s, start subTaskId = %s, parent row = %s, parent raw result = %s", task.TaskId, subTask.TaskId, row, result)
 					x.Submit(context.Background(), subTask)
 				}
 			}
 		}
+
+		// Used to determine how many results each task has
+		x.clientMeta.DebugF("taskId = %s, result count = %d", taskId, taskResultCount)
+
 	}()
 
 	// Waiting for the two of you to finish
@@ -322,6 +341,7 @@ func (x *DataSourceExecutor) expandTask(ctx context.Context, task *DataSourcePul
 	} else {
 		clientSlice = append(clientSlice, nil)
 	}
+	x.clientMeta.DebugF("taskId = %s, expand done, client slice count = %d", taskId, len(clientSlice))
 
 	// Create the client task execution context
 	clientTaskContextSlice := make([]*ClientTaskContext, 0)
