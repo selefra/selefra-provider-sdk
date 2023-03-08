@@ -28,6 +28,8 @@ type ClientLogger interface {
 
 	Fatal(msg string, fields ...zap.Field)
 	FatalF(msg string, args ...any)
+
+	LogDiagnostics(prefix string, d *Diagnostics)
 }
 
 type DesensitizationFunction func(ctx context.Context, msg string, fields ...zap.Field) (string, []zap.Field)
@@ -87,6 +89,40 @@ func (x *DefaultClientLogger) Fatal(msg string, fields ...zap.Field) {
 
 func (x *DefaultClientLogger) FatalF(msg string, args ...any) {
 	x.Log(zapcore.FatalLevel, fmt.Sprintf(msg, args...))
+}
+
+// LogDiagnostics Logs need to be able to print diagnostic logs directly
+func (x *DefaultClientLogger) LogDiagnostics(prefix string, d *Diagnostics) {
+
+	if d == nil {
+		return
+	}
+
+	for _, diagnostic := range d.GetDiagnosticSlice() {
+
+		var msg string
+		if prefix != "" {
+			msg = fmt.Sprintf("%s, %s", prefix, diagnostic.Content())
+		} else {
+			msg = diagnostic.Content()
+		}
+
+		switch diagnostic.level {
+		case DiagnosisLevelTrace:
+			x.Debug(msg)
+		case DiagnosisLevelDebug:
+			x.Debug(msg)
+		case DiagnosisLevelInfo:
+			x.Info(msg)
+		case DiagnosisLevelWarn:
+			x.Warn(msg)
+		case DiagnosisLevelError:
+			x.Error(msg)
+		case DiagnosisLevelFatal:
+			x.Fatal(msg)
+		}
+	}
+
 }
 
 func (x *DefaultClientLogger) Name() string {

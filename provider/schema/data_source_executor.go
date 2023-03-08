@@ -173,11 +173,16 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 	wg.Add(1)
 	go func() {
 
+		taskExecBegin := time.Now()
+
 		defer func() {
-			if err := recover(); err != nil {
+
+			taskExecCost := time.Now().Sub(taskExecBegin)
+
+			if r := recover(); r != nil {
 
 				msg := strings.Builder{}
-				msg.WriteString(fmt.Sprintf("taskId = %s, table %s data source pull table panic: %s", taskId, table.TableName, err))
+				msg.WriteString(fmt.Sprintf("taskId = %s, cost = %s, table %s data source pull table panic: %s", taskId, taskExecCost.String(), table.TableName, r))
 				if !isIgnorePullTableError {
 					task.DiagnosticsChannel <- NewDiagnostics().AddErrorMsg(msg.String())
 				}
@@ -200,17 +205,14 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 			x.clientMeta.DebugF("taskId = %s, pull table done", taskId)
 		}()
 
-		clientBegin := time.Now()
 		x.clientMeta.DebugF("taskId = %s, begin execution pull table...", taskId)
 		d := task.Table.DataSource.Pull(context.Background(), x.clientMeta, task.Client, task, resultChannel)
 
-		clientCost := time.Now().Sub(clientBegin)
-		pullTableResultMsg := ""
-		if d != nil {
-			pullTableResultMsg = d.String()
-		}
+		taskExecCost := time.Now().Sub(taskExecBegin)
 		// If ignore errors are configured, the error message is typed into the log, although it is not thrown upward
-		x.clientMeta.DebugF("taskId = %s, execution pull table done, cost = %s, pullTableResultMsg = %s", taskId, clientCost.String(), pullTableResultMsg)
+		x.clientMeta.DebugF("taskId = %s, execution pull table done, cost = %s", taskId, taskExecCost.String())
+		// Print it out at the appropriate level
+		x.clientMeta.LogDiagnostics(fmt.Sprintf("taskId = %s", taskId), d)
 
 		// send diagnostics if not ignore error
 		if x.errorsHandlerMeta.IsIgnore(IgnoredErrorOnPullTable) {
@@ -261,15 +263,18 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 				x.clientMeta.DebugF("taskId = %s, return nil result, ignored it", taskId)
 				continue
 			}
-			x.clientMeta.DebugF("taskId = %s, find one result", taskId)
+			x.clientMeta.DebugF("taskId = %s, receive one result, taskResultCount = %d", taskId, taskResultCount)
 
 			// run task result handler
+			execResultHandlerBeginTime := time.Now()
 			rows, resultSlice, d := x.execResultHandlerWithRecover(task.Ctx, x.clientMeta, task.Client, task, result)
+			execResultHandlerCost := time.Now().Sub(execResultHandlerBeginTime)
+			x.clientMeta.InfoF("taskId = %s, execResultHandlerCost = %s", taskId, execResultHandlerCost.String())
+			x.clientMeta.LogDiagnostics(fmt.Sprintf("taskId = %s", task.TaskId), d)
 			if d != nil && d.HasError() {
 				if !isIgnorePullTableError {
 					task.DiagnosticsChannel <- d
 				}
-				x.clientMeta.ErrorF("taskId = %s, execResultHandlerWithRecover return error: %s", taskId, d.String())
 			} else {
 				task.DiagnosticsChannel <- d
 			}
@@ -315,7 +320,7 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 		}
 
 		// Used to determine how many results each task has
-		x.clientMeta.DebugF("taskId = %s, result count = %d", taskId, taskResultCount)
+		x.clientMeta.DebugF("taskId = %s, not expand result count = %d", taskId, taskResultCount)
 
 	}()
 
@@ -376,6 +381,7 @@ func (x *DataSourceExecutor) expandTask(ctx context.Context, task *DataSourcePul
 		expandTask.Client = clientTaskContext.Client
 		expandTask.IsExpandDone = true
 		x.Submit(ctx, expandTask)
+		x.clientMeta.DebugF("taskId = %s, expand new task id = %s", taskId, expandTask.TaskId)
 	}
 
 }
@@ -408,7 +414,6 @@ func (x *DataSourceExecutor) execResultHandlerWithRecover(ctx context.Context, c
 			msg.WriteString("\nStack: \n")
 			msg.WriteString(runtime_util.Stack())
 			x.clientMeta.Error(msg.String())
-
 		}
 
 	}()
@@ -417,7 +422,10 @@ func (x *DataSourceExecutor) execResultHandlerWithRecover(ctx context.Context, c
 	// task is equivalent to isolating the task context of the different results
 	task = task.Clone()
 	task.NotExpandRawResult = result
+	resultHandlerBegin := time.Now()
 	rows, resultSlice, diagnostics = task.ResultHandler(ctx, x.clientMeta, client, task, result)
+	cost := time.Now().Sub(resultHandlerBegin)
+	clientMeta.DebugF("taskId = %s, exec ResultHandler, cost = %s", task.TaskId, cost.String())
 	return
 }
 

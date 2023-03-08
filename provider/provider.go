@@ -57,6 +57,7 @@ func (x *Provider) GetProviderInformation(ctx context.Context, in *shard.GetProv
 				Tables:      nil,
 				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec provider GetProviderInformation panic: %s", r),
 			}
+			x.ClientMeta.ErrorF("exec provider GetProviderInformation panic: %s", r)
 		}
 	}()
 
@@ -90,6 +91,7 @@ func (x *Provider) GetProviderConfig(ctx context.Context, in *shard.GetProviderC
 				Version:     x.Version,
 				Diagnostics: schema.NewDiagnostics().AddErrorMsg("exec provider GetProviderConfig panic: %s", r),
 			}
+			x.ClientMeta.ErrorF("exec provider GetProviderConfig panic: %s", r)
 		}
 	}()
 
