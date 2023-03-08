@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"go.uber.org/zap"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,21 +63,21 @@ func (x *PostgresqlStorage) Lock(ctx context.Context, lockId, ownerId string) er
 func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId string, leftTryTimes int) error {
 	lockKey := buildLockKey(lockId)
 
-	x.DebugF("begin try lock", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+	x.DebugF("lockId = %s, ownerId = %s, leftTryTimes = %d, begin try lock", lockId, ownerId, leftTryTimes)
 
 	// Determine whether the lock already exists
 	information, _ := x.readLockInformation(ctx, lockKey)
 	if information != nil {
 		oldJsonString := information.ToJsonString()
 
-		x.DebugF("lock already exists", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.String("oldJsonString", oldJsonString))
+		x.DebugF("lockId = %s, ownerId = %s, lock already exists, oldJsonString = %s", lockId, ownerId, oldJsonString)
 
 		if information.OwnerId == ownerId {
 			// Is reentrant to acquire the lock, increase the number of locks by 1
 			information.LockCount++
 			expireTime, err := x.nextExceptedExpireTime(ctx)
 			if err != nil {
-				x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+				x.ErrorF("lockId = %s, ownerId = %s, get database time error: %s", lockId, ownerId, err.Error())
 				if leftTryTimes > 0 {
 					return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
 				}
@@ -89,33 +88,33 @@ func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId s
 			updateSql := `UPDATE selefra_meta_kv SET value = $1 WHERE key = $2 AND value = $3 `
 			rs, err := x.pool.Exec(ctx, updateSql, information.ToJsonString(), lockKey, oldJsonString)
 			if err != nil {
-				x.ErrorF("lock is mine, but exec cas for lock failed", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+				x.ErrorF("lockId = %s, ownerId = %s, lock is mine, but exec cas for lock failed: %s", lockId, ownerId, err.Error())
 				return err
 			}
 			// update success
 			if rs.RowsAffected() != 0 {
-				x.DebugF("lock is mine, exec cas for lock success", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+				x.DebugF("lockId = %s, ownerId = %s, lock is mine, exec cas for lock success", lockId, ownerId)
 				return nil
 			}
 			// need retry
 			if leftTryTimes > 0 {
-				x.DebugF("lock is mine, exec cas for lock miss, but i can retry", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+				x.DebugF("lockId = %s, ownerId = %s, lock is mine, exec cas for lock miss, but i can retry", lockId, ownerId)
 				return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
 			}
-			x.ErrorF("lock is mine, but exec cas for lock finally failed, and my try times used up, so give up", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+			x.ErrorF("lockId = %s, ownerId = %s, lock is mine, but exec cas for lock finally failed, and my try times used up, so give up", lockId, ownerId)
 			return ErrLockFailed
 		} else {
 			// If a lock exists but is not held by itself, check to see if it is an expired lock
 			databaseTime, err := x.GetTime(ctx)
 			if err != nil {
-				x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+				x.ErrorF("lockId = %s, ownerId = %s, get database time error: %s", lockId, ownerId, err.Error())
 				if leftTryTimes > 0 {
 					return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
 				}
 				return err
 			}
 			if information.ExceptedExpireTime.After(databaseTime) {
-				x.ErrorF("lock is not mine and it is still ok, so i give up, ok, you win", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+				x.ErrorF("lockId = %s, ownerId = %s, lock is not mine and it is still ok, so i give up, ok, you win", lockId, ownerId)
 				// If the lock is not expired, it has to be abandoned
 				return ErrLockFailed
 			}
@@ -123,28 +122,28 @@ func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId s
 			dropExpiredLockSql := `DELETE FROM selefra_meta_kv WHERE key = $1 AND value = $2`
 			rs, err := x.pool.Exec(ctx, dropExpiredLockSql, lockKey, oldJsonString)
 			if err != nil {
-				x.ErrorF("lock is not mine and but it is expired, so i can kill it, but killed failed", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+				x.ErrorF("lockId = %s, ownerId = %s, lock is not mine and but it is expired, so i can kill it, but killed failed: %s", lockId, ownerId, err.Error())
 				return err
 			}
 			// update failed, lock get failed
 			if rs.RowsAffected() == 0 {
-				x.ErrorF("lock is not mine and it is expired, so i can kill it, but killed failed, may be cas miss", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+				x.ErrorF("lockId = %s, ownerId = %s, lock is not mine and it is expired, so i can kill it, but killed failed, may be cas miss", lockId, ownerId)
 				return ErrLockFailed
 			}
 			if leftTryTimes > 0 {
-				x.ErrorF("lock is not mine and it is expired, so i can kill it, i killed success! woo, i will retry for lock", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+				x.ErrorF("lockId = %s, ownerId = %s, lock is not mine and it is expired, so i can kill it, i killed success! woo, i will retry for lock", lockId, ownerId)
 				return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
 			}
-			x.ErrorF("lock is not mine and it is expired, so i can kill it, i killed success! but my try times used up, so give up", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+			x.ErrorF("lockId = %s, ownerId = %s, lock is not mine and it is expired, so i can kill it, i killed success! but my try times used up, so give up", lockId, ownerId)
 			return ErrLockFailed
 		}
 	}
 
-	x.DebugF("lock not exists, try lock with cas", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+	x.DebugF("lockId = %s, ownerId = %s, lock not exists, try lock with cas", lockId, ownerId)
 
 	expireTime, err := x.nextExceptedExpireTime(ctx)
 	if err != nil {
-		x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+		x.ErrorF("lockId = %s, ownerId = %s, get database time error： %s", lockId, ownerId, err.Error())
 		if leftTryTimes > 0 {
 			return x.lockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
 		}
@@ -164,25 +163,25 @@ func (x *PostgresqlStorage) lockWithRetry(ctx context.Context, lockId, ownerId s
                              ) VALUES ( $1, $2 )`
 	exec, err := x.pool.Exec(ctx, sql, lockKey, lockInformation.ToJsonString())
 	if err != nil || exec.RowsAffected() != 1 {
-		x.ErrorF("try cas lock failed", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+		x.ErrorF("lockId = %s, ownerId = %s, try cas lock failed: %s", lockId, ownerId, err.Error())
 		// lock failed
 		return ErrLockFailed
 	}
 
-	x.DebugF("try cas lock success", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+	x.DebugF("lockId = %s, ownerId = %s, try cas lock success", lockId, ownerId)
 
 	// lock success, run refresh goroutine
 	lock.Lock()
 	defer lock.Unlock()
 	goroutine := lockRefreshGoroutineMap[lockId]
 	if goroutine != nil {
-		x.DebugF("stop old refresh goroutine", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+		x.DebugF("lockId = %s, ownerId = %s, stop old refresh goroutine", lockId, ownerId)
 		goroutine.Stop()
 	}
 	refreshGoroutine := NewLockRefreshGoroutine(x, lockId, ownerId)
 	refreshGoroutine.Start()
 	lockRefreshGoroutineMap[lockId] = refreshGoroutine
-	x.DebugF("start new refresh goroutine", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+	x.DebugF("lockId = %s, ownerId = %s, start new refresh goroutine", lockId, ownerId)
 	return nil
 }
 
@@ -193,13 +192,13 @@ func (x *PostgresqlStorage) refreshLockExpiredTime(ctx context.Context, lockId, 
 	// Determine whether the lock already exists
 	information, err := x.readLockInformation(ctx, lockKey)
 	if err != nil {
-		x.ErrorF("try refresh, but read lock information failed", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Error(err))
+		x.ErrorF("lockId = %s, ownerId = %s, try refresh, but read lock information failed: %s", lockId, ownerId, err.Error())
 		return err
 	}
 	oldJsonString := information.ToJsonString()
 	// You can only refresh locks that you own
 	if information.OwnerId != ownerId {
-		x.ErrorF("try refresh, but lock not belong to you", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.String("oldJsonString", oldJsonString))
+		x.ErrorF("lockId = %s, ownerId = %s, try refresh, but lock not belong to you, oldJsonString = %s", lockId, ownerId, oldJsonString)
 		return ErrLockNotBelongYou
 	}
 	information.ExceptedExpireTime = exceptedExpiredTime
@@ -208,14 +207,14 @@ func (x *PostgresqlStorage) refreshLockExpiredTime(ctx context.Context, lockId, 
 	updateSql := `UPDATE selefra_meta_kv SET value = $1 WHERE key = $2 AND value = $3`
 	rs, err := x.pool.Exec(ctx, updateSql, newJsonString, lockKey, oldJsonString)
 	if err != nil {
-		x.ErrorF("try refresh, but cas failed", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.String("oldJsonString", oldJsonString), zap.Error(err))
+		x.ErrorF("lockId = %s, ownerId = %s, try refresh, but cas failed, oldJsonString = %s, error msg: %s", lockId, ownerId, oldJsonString, err.Error())
 		return err
 	}
 	if rs.RowsAffected() == 0 {
-		x.ErrorF("try refresh, but cas miss", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.String("oldJsonString", oldJsonString), zap.Error(err))
+		x.ErrorF("lockId = %s, ownerId = %s, try refresh, but cas miss, oldJsonString = %s, error msg: %s", lockId, ownerId, oldJsonString, err.Error())
 		return ErrLockRefreshFailed
 	}
-	x.DebugF("try refresh, success", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.String("oldJsonString", oldJsonString), zap.String("newJsonString", newJsonString))
+	x.DebugF("lockId = %s, ownerId = %s, try refresh, success, oldJsonString = %s, newJsonString = %s", lockId, ownerId, oldJsonString, newJsonString)
 	return nil
 }
 
@@ -230,17 +229,17 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 
 	lockInformation, err := x.readLockInformation(ctx, lockKey)
 	if err != nil {
-		x.ErrorF("try unlock, but lock not exists", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+		x.ErrorF("lockId = %s, ownerId = %s, try unlock, but lock not exists", lockId, ownerId)
 		return err
 	}
 	oldJsonString := lockInformation.ToJsonString()
 	// lock exists, check it's owner
 	if lockInformation.OwnerId != ownerId {
-		x.ErrorF("try unlock, but lock not belong to you", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.String("oldJsonString", oldJsonString))
+		x.ErrorF("lockId = %s, ownerId = %s, try unlock, but lock not belong to you, oldJsonString = %s", lockId, ownerId, oldJsonString)
 		return ErrLockNotBelongYou
 	}
 
-	x.DebugF("try unlock, lock exists and is belong me", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.String("oldJsonString", oldJsonString))
+	x.DebugF("lockId = %s, ownerId = %s, try unlock, lock exists and is belong me, oldJsonString = %s", lockId, ownerId, oldJsonString)
 
 	// ok, lock is mine, lock count - 1
 	lockInformation.LockCount--
@@ -249,7 +248,7 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 		// Is reentrant to acquire the lock, increase the number of locks by 1
 		expireTime, err := x.nextExceptedExpireTime(ctx)
 		if err != nil {
-			x.ErrorF("get database time error", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+			x.ErrorF("lockId = %s, ownerId = %s, get database time error: %s", lockId, ownerId, err.Error())
 			if leftTryTimes > 0 {
 				return x.unlockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
 			}
@@ -260,20 +259,20 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 		updateSql := `UPDATE selefra_meta_kv SET value = $1 WHERE key = $2 AND value = $3 `
 		rs, err := x.pool.Exec(ctx, updateSql, lockInformation.ToJsonString(), lockKey, oldJsonString)
 		if err != nil {
-			x.ErrorF("try unlock, after unlock still hold lock, cas failed", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+			x.ErrorF("lockId = %s, ownerId = %s, try unlock, after unlock still hold lock, cas failed: %s", lockId, ownerId, err.Error())
 			return err
 		}
 		// update success
 		if rs.RowsAffected() != 0 {
-			x.DebugF("try unlock, after unlock still hold lock, unlock success", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+			x.DebugF("lockId = %s, ownerId = %s, try unlock, after unlock still hold lock, unlock success", lockId, ownerId)
 			return nil
 		}
 		// update failed, need retry
 		if leftTryTimes > 0 {
-			x.ErrorF("try unlock, after unlock still hold lock, cas miss, but i can retry", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+			x.ErrorF("lockId = %s, ownerId = %s, try unlock, after unlock still hold lock, cas miss, but i can retry", lockId, ownerId)
 			return x.unlockWithRetry(ctx, lockId, ownerId, leftTryTimes-1)
 		}
-		x.ErrorF("try unlock, after unlock still hold lock, and i try times used up, so i give up", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+		x.ErrorF("lockId = %s, ownerId = %s, try unlock, after unlock still hold lock, and i try times used up, so i give up", lockId, ownerId)
 		// try times used up, finally failed
 		return ErrUnlockFailed
 	}
@@ -282,25 +281,25 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 	deleteSql := `DELETE FROM selefra_meta_kv WHERE key = $1 AND value = $2`
 	exec, err := x.pool.Exec(ctx, deleteSql, lockKey, oldJsonString)
 	if err != nil {
-		x.ErrorF("try unlock, lock need release, but cas failed", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+		x.ErrorF("lockId = %s, ownerId = %s, try unlock, lock need release, but cas failed: %s", lockId, ownerId, err.Error())
 		return err
 	}
 	// delete failed
 	if exec.RowsAffected() == 0 {
 		// need retry
 		if leftTryTimes > 0 {
-			x.ErrorF("try unlock, and lock need release, cas miss, but i can retry", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+			x.ErrorF("lockId = %s, ownerId = %s, try unlock, and lock need release, cas miss, but i can retry", lockId, ownerId)
 			if err := x.unlockWithRetry(ctx, lockId, ownerId, leftTryTimes-1); err != nil {
-				x.ErrorF("try unlock, and lock need release, retry failed", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes), zap.Error(err))
+				x.ErrorF("lockId = %s, ownerId = %s, try unlock, and lock need release, retry failed: %s", lockId, ownerId, err.Error())
 				return err
 			}
-			x.DebugF("try unlock, and lock need release, retry success, release success", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+			x.DebugF("lockId = %s, ownerId = %s, try unlock, and lock need release, retry success, release success", lockId, ownerId)
 		} else {
-			x.ErrorF("try unlock, and lock need release, and cas miss, and i try times used up, so give up", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+			x.ErrorF("lockId = %s, ownerId = %s, try unlock, and lock need release, and cas miss, and i try times used up, so give up", lockId, ownerId)
 			return ErrUnlockFailed
 		}
 	} else {
-		x.DebugF("try unlock, and lock need release, cas success", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+		x.DebugF("lockId = %s, ownerId = %s, try unlock, and lock need release, cas success", lockId, ownerId)
 	}
 
 	// stop refresh goroutine
@@ -308,7 +307,7 @@ func (x *PostgresqlStorage) unlockWithRetry(ctx context.Context, lockId, ownerId
 	defer lock.Unlock()
 	goroutine := lockRefreshGoroutineMap[lockId]
 	if goroutine != nil {
-		x.DebugF("try unlock, send refresh goroutine stop signal", zap.String("lockId", lockId), zap.String("ownerId", ownerId), zap.Int("leftTryTimes", leftTryTimes))
+		x.DebugF("lockId = %s, ownerId = %s,try unlock, send refresh goroutine stop signal", lockId, ownerId)
 		goroutine.Stop()
 	}
 
@@ -401,7 +400,7 @@ func (x *LockRefreshGoroutine) Start() {
 			databaseTime, err := x.storage.GetTime(ctx)
 			cancelFunc()
 			if err != nil {
-				x.storage.ErrorF("get database time error", zap.Error(err))
+				x.storage.ErrorF("get database time error: %s", err.Error())
 				time.Sleep(time.Second * 10)
 				continue
 			}
@@ -413,7 +412,7 @@ func (x *LockRefreshGoroutine) Start() {
 			if err != nil {
 				continueFailedCount++
 				if continueFailedCount > 10 {
-					x.storage.DebugF("lock refresh continue failed too many, go goroutine exit", zap.String("lockId", x.lockId), zap.String("ownerId", x.ownerId))
+					x.storage.DebugF("lockId = %s, ownerId = %s, lock refresh continue failed too many, go goroutine exit", x.lockId, x.ownerId)
 					return
 				}
 			} else {
@@ -421,7 +420,7 @@ func (x *LockRefreshGoroutine) Start() {
 			}
 			time.Sleep(time.Second * 3)
 		}
-		x.storage.DebugF("lock refresh go goroutine exit", zap.String("lockId", x.lockId), zap.String("ownerId", x.ownerId))
+		x.storage.DebugF("lockId = %s, ownerId = %s, lock refresh go goroutine exit", x.lockId, x.ownerId)
 	}()
 }
 

@@ -268,7 +268,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 				item := reflectValue.Index(index).Interface()
 				resultSlice = append(resultSlice, item)
 			}
-			clientMeta.DebugF("taskId = %s, enable DataSourcePullResultAutoExpand, result auto expand to %d", task.TaskId, reflectValue.Len())
+			clientMeta.DebugF("taskId = %s, enable DataSourcePullResultAutoExpand, current result auto expand to %d", task.TaskId, reflectValue.Len())
 		default:
 			clientMeta.DebugF("taskId = %s, enable DataSourcePullResultAutoExpand, result only one", task.TaskId)
 			resultSlice = append(resultSlice, result)
@@ -289,7 +289,8 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 		if d != nil && d.HasError() {
 			// If an error occurs and ignore is configured, the end occurs
 			if x.myProvider.ErrorsHandlerMeta.IsIgnore(schema.IgnoredErrorOnSaveResult) {
-				clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult, error msg = %s", task.TaskId, diagnostics.String())
+				//clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult, error msg = %s", task.TaskId, diagnostics.String())
+				clientMeta.LogDiagnostics(fmt.Sprintf("taskId = %s", task.TaskId), diagnostics)
 			} else {
 				return nil, nil, diagnostics
 			}
@@ -297,6 +298,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 
 		// check is need save, if any column have value, try save it
 		if row == nil {
+			clientMeta.DebugF("taskId = %s, resultHandler, row is nil", task.TaskId)
 			continue
 		}
 		haveAnyColumnValue := false
@@ -307,6 +309,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 			}
 		}
 		if !haveAnyColumnValue {
+			clientMeta.DebugF("taskId = %s, resultHandler, row not have any value", task.TaskId)
 			continue
 		}
 
@@ -342,7 +345,7 @@ func (x *ProviderRuntime) resultHandler(ctx context.Context, clientMeta *schema.
 			} else {
 				err := saveSuccessRows.AppendRow(row)
 				if err != nil {
-					clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult")
+					clientMeta.ErrorF("taskId = %s, IgnoredErrorOnSaveResult, error msg: %s", err.Error())
 					isRowsMergeSuccess = false
 				}
 			}
