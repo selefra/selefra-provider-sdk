@@ -1,6 +1,6 @@
 <!-- Your Title -->
 <p align="left">
-<img src="https://user-images.githubusercontent.com/124020340/224677116-44ae9c6c-a543-4813-9ef3-c7cbcacd2fbe.png" width="400">
+<img src="https://user-images.githubusercontent.com/124020340/225191729-83a5fcc9-3e7f-4f1f-a50c-c9c2075e5a6c.png" width="400">
 </p>
 
 <!-- Badges -->
