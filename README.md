@@ -6,7 +6,7 @@ The Selefra Provider SDK enables building Selefra plugin, allow developer use SD
 
 ## Documentation
 
-See [Docs](https://selefra.io/docs) for best practices and detailed instructions. In docs, you will find info on installation, CLI usage, project workflow and more guides on how to accomplish cloud inspection tasks.
+See [Docs](https://www.selefra.io/docs/introduction) for best practices and detailed instructions. In docs, you will find info on installation, CLI usage, project workflow and more guides on how to accomplish cloud inspection tasks.
 
 ## Community
 
