@@ -8,15 +8,26 @@ import (
 	"github.com/selefra/selefra-provider-sdk/provider/transformer/column_value_extractor"
 	"github.com/selefra/selefra-utils/pkg/json_util"
 	"github.com/selefra/selefra-utils/pkg/reflect_util"
+	"github.com/songzhibin97/go-ognl"
 	"reflect"
 )
 
-func TerraformRawDataColumnValueExtractor() schema.ColumnValueExtractor {
+func TerraformRawDataColumnValueExtractor(selectors ...string) schema.ColumnValueExtractor {
 	return column_value_extractor.WrapperExtractFunction(func(ctx context.Context, clientMeta *schema.ClientMeta, client any, task *schema.DataSourcePullTask, row *schema.Row, column *schema.Column, result any) (any, *schema.Diagnostics) {
 		if reflect_util.IsNil(result) {
 			return nil, nil
 		}
-		return json_util.ToJsonString(EnsureJSONSerializable(result)), nil
+		if len(selectors) != 0 {
+			for _, selector := range selectors {
+				v := ognl.Get(result, selector).Value()
+				if !reflect_util.IsNil(v) {
+					return json_util.ToJsonString(EnsureJSONSerializable(v)), nil
+				}
+			}
+			return nil, nil
+		} else {
+			return json_util.ToJsonString(EnsureJSONSerializable(result)), nil
+		}
 	})
 }
 
