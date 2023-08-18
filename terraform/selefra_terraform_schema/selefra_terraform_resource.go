@@ -79,7 +79,6 @@ func NewResourceRequestParamWithIDAndArgumentMap(id string, argumentMap map[stri
 // ListResourceParamsFunc Returns several parameters that request Resource usage
 type ListResourceParamsFunc func(ctx context.Context, clientMeta *schema.ClientMeta, taskClient any, task *schema.DataSourcePullTask, resultChannel chan<- any) ([]*ResourceRequestParam, *schema.Diagnostics)
 
-// 获取当前系统已经使用的内存
 func GetMemoryUsage() int {
 	u, err := mem.VirtualMemory()
 	if err != nil {
