@@ -7,6 +7,8 @@ import (
 	"github.com/selefra/selefra-utils/pkg/id_util"
 	"github.com/selefra/selefra-utils/pkg/reflect_util"
 	"github.com/selefra/selefra-utils/pkg/runtime_util"
+	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -147,6 +149,12 @@ func (x *DataSourceExecutor) execTaskWithRecovery(consumerId uint64, task *DataS
 	return diagnostics
 }
 
+func GetMemoryUsage() int {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return int(m.Alloc / 1024 / 1024)
+}
+
 // Tasks may generate new tasks, which are executed recursively
 func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 
@@ -206,6 +214,20 @@ func (x *DataSourceExecutor) execTask(task *DataSourcePullTask) {
 		}()
 
 		x.clientMeta.DebugF("taskId = %s, begin execution pull table...", taskId)
+
+		memory := GetMemoryUsage()
+
+		for {
+			f, _ := os.Create("memory")
+			f.Write([]byte(fmt.Sprintf("%d", memory)))
+			if memory > 512 {
+				time.Sleep(time.Second * 1)
+				memory = GetMemoryUsage()
+			} else {
+				break
+			}
+		}
+
 		d := task.Table.DataSource.Pull(context.Background(), x.clientMeta, task.Client, task, resultChannel)
 
 		taskExecCost := time.Now().Sub(taskExecBegin)
